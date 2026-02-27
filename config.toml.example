@@ -1,0 +1,8 @@
+# Reqall MCP Server Configuration for Codex
+# Copy this to your Codex project configuration
+
+[mcp.reqall]
+url = "https://reqall.net/mcp"
+
+[mcp.reqall.headers]
+Authorization = "Bearer ${REQALL_API_KEY}"

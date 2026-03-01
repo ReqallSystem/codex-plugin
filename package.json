@@ -1,6 +1,6 @@
 {
   "name": "@reqall/codex-plugin",
-  "version": "0.0.3",
+  "version": "2026.2.1",
   "description": "Reqall plugin for OpenAI Codex — persistent semantic memory for AI agents",
   "type": "module",
   "files": [

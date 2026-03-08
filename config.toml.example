@@ -1,8 +1,13 @@
-# Reqall MCP Server Configuration for Codex
-# Copy this to your Codex project configuration
+# Reqall MCP server configuration for Codex.
+# Copy into your Codex config.toml and set REQALL_API_KEY in the environment.
+
+# Example:
+#   export REQALL_API_KEY="..."
+#   export REQALL_URL="https://reqall.net"
 
 [mcp.reqall]
-url = "https://reqall.net/mcp"
+# Use REQALL_URL so cloud/self-hosted endpoints both work.
+url = "${REQALL_URL}/mcp"
 
 [mcp.reqall.headers]
 Authorization = "Bearer ${REQALL_API_KEY}"

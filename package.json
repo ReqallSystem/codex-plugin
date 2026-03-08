@@ -1,11 +1,18 @@
 {
   "name": "@reqall/codex-plugin",
-  "version": "2026.2.1",
-  "description": "Reqall plugin for OpenAI Codex — persistent semantic memory for AI agents",
+  "version": "2026.3.10",
+  "description": "Reqall plugin for OpenAI Codex - persistent semantic memory for AI agents",
   "type": "module",
+  "bin": {
+    "reqall-guardrail": "scripts/reqall-guardrail.mjs"
+  },
   "files": [
+    "README.md",
     "AGENTS.md",
-    "config.toml.example"
+    "config.toml.example",
+    "GUARDRAIL.md",
+    "ROADMAP.md",
+    "scripts"
   ],
   "license": "MIT"
 }

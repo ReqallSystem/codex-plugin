@@ -2,23 +2,24 @@
 
 Primary objective: guaranteed automatic context injection + persistence for non-trivial work.
 
-Current status (2026-03-08):
-- Implemented: local P0 guardrail CLI (`reqall-guardrail`) with begin/context/persist/check enforcement.
+Current status (2026-03-22):
+- Implemented: Codex parity bundle with context/document/persist/review skills
+- Implemented: local guardrail CLI (`reqall-guardrail`) with evidence-backed begin/context/document/persist/check state
+- Implemented: helper CLI (`reqall-codex-plugin`) for context, pre-edit, document, persist, and review workflows
+- Implemented: portable MCP configuration examples (`config.toml.example`, `.mcp.json`, `mcp-servers.json`)
 
-## P0: Automation Guarantees
+## Remaining Gaps To Native Hook Parity
 
-1. Native lifecycle hook adapter (when host exposes stable hooks)
+1. Native lifecycle hook adapter (when Codex exposes stable hooks)
    - Map start-of-task -> context retrieval
+   - Map pre-edit events -> file-aware retrieval
+   - Map post-tool/write events -> incremental documentation
    - Map end-of-task -> mandatory persistence
-   - Map tool-write events -> optional incremental documentation
+   - Map subagent completion -> plan/result persistence
 
-2. Persistence guardrail
-   - Pre-final-response check that verifies at least one persistence attempt for non-trivial work
-   - Explicit failure reporting when persistence could not run
-
-3. Context bootstrap guardrail
-   - Pre-edit check that verifies context retrieval ran for non-trivial tasks
-   - Fall back to lightweight retrieval if skipped
+2. Verified Reqall MCP audit trail
+   - Replace manual evidence strings with machine-verified MCP operation traces
+   - Attach created/updated record identifiers to guardrail state
 
 ## P1: Quality And Recall Depth
 
@@ -31,6 +32,9 @@ Current status (2026-03-08):
 3. Open-risk extractor
    - Detect unresolved TODOs/failures and persist as open issue/todo records
 
+4. Review assistant automation
+   - Recommend stale/duplicate/open record actions during review mode
+
 ## P2: Integration
 
 1. PR merge sync
@@ -41,12 +45,3 @@ Current status (2026-03-08):
 
 3. Mode presets
    - Fast fix, deep refactor, release hardening profiles for memory density
-
-## Suggested Order
-
-1. Native lifecycle hook adapter
-2. Persistence guardrail
-3. Context bootstrap guardrail
-4. Diff-aware drafting
-5. Verification normalizer
-6. Open-risk extractor

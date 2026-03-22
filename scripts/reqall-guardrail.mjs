@@ -2,42 +2,14 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { parseArgs, resolveProjectName } from './lib/project.mjs';
 
 const STATE_DIR = resolve(process.cwd(), '.reqall');
 const STATE_FILE = resolve(STATE_DIR, 'codex-guardrail.json');
-const VERSION = 1;
+const VERSION = 2;
 
 function now() {
   return new Date().toISOString();
-}
-
-function parseArgs(argv) {
-  const args = { _: [] };
-  for (let i = 0; i < argv.length; i += 1) {
-    const token = argv[i];
-    if (!token.startsWith('--')) {
-      args._.push(token);
-      continue;
-    }
-
-    if (token === '--trivial') {
-      args.trivial = true;
-      continue;
-    }
-    if (token === '--non-trivial') {
-      args.nonTrivial = true;
-      continue;
-    }
-
-    const key = token.slice(2);
-    const next = argv[i + 1];
-    if (!next || next.startsWith('--')) {
-      throw new Error(`Missing value for --${key}`);
-    }
-    args[key] = next;
-    i += 1;
-  }
-  return args;
 }
 
 function ensureStateDir() {
@@ -72,8 +44,9 @@ function usage() {
   console.log();
   console.log('Usage:');
   console.log('  reqall-guardrail begin [--task "text"] [--project "name"] [--trivial]');
-  console.log('  reqall-guardrail mark-context');
-  console.log('  reqall-guardrail mark-persist');
+  console.log('  reqall-guardrail mark-context [--evidence "text"]');
+  console.log('  reqall-guardrail mark-document [--evidence "text"]');
+  console.log('  reqall-guardrail mark-persist [--evidence "text"]');
   console.log('  reqall-guardrail check');
   console.log('  reqall-guardrail status');
   console.log('  reqall-guardrail reset');
@@ -93,39 +66,66 @@ function requireActiveState() {
   return state;
 }
 
+function appendEvidence(bucket, evidence) {
+  if (!evidence) {
+    return bucket;
+  }
+  return [...bucket, { at: now(), value: evidence }];
+}
+
 function begin(args) {
   const nonTrivial = args.trivial ? false : true;
+  const project = typeof args.project === 'string' && args.project.trim() ? args.project.trim() : resolveProjectName();
   const state = {
     version: VERSION,
     updatedAt: now(),
     current: {
       startedAt: now(),
-      task: args.task ?? '',
-      project: args.project ?? '',
+      task: typeof args.task === 'string' ? args.task : '',
+      project,
       nonTrivial,
       contextInjected: false,
       persisted: false,
+      documented: false,
       contextInjectedAt: null,
       persistedAt: null,
+      documentedAt: null,
+      evidence: {
+        context: [],
+        document: [],
+        persist: [],
+      },
     },
   };
   writeState(state);
-  ok(nonTrivial ? 'Started non-trivial task guardrail.' : 'Started trivial task guardrail.');
+  ok(nonTrivial ? `Started non-trivial task guardrail for ${project}.` : `Started trivial task guardrail for ${project}.`);
 }
 
-function markContext() {
+function markContext(args) {
   const state = requireActiveState();
   state.current.contextInjected = true;
   state.current.contextInjectedAt = now();
+  state.current.evidence.context = appendEvidence(state.current.evidence.context, args.evidence || args.note || 'manual context confirmation');
   state.updatedAt = now();
   writeState(state);
   ok('Marked context injection as complete.');
 }
 
-function markPersist() {
+function markDocument(args) {
+  const state = requireActiveState();
+  state.current.documented = true;
+  state.current.documentedAt = now();
+  state.current.evidence.document = appendEvidence(state.current.evidence.document, args.evidence || args.note || 'manual documentation confirmation');
+  state.updatedAt = now();
+  writeState(state);
+  ok('Marked incremental documentation as complete.');
+}
+
+function markPersist(args) {
   const state = requireActiveState();
   state.current.persisted = true;
   state.current.persistedAt = now();
+  state.current.evidence.persist = appendEvidence(state.current.evidence.persist, args.evidence || args.note || 'manual persistence confirmation');
   state.updatedAt = now();
   writeState(state);
   ok('Marked persistence as complete.');
@@ -142,11 +142,11 @@ function check() {
     return;
   }
 
-  if (!state.current.contextInjected) {
+  if (!state.current.contextInjected || state.current.evidence.context.length === 0) {
     fail('Guardrail check failed: context injection was not marked complete.', 11);
   }
 
-  if (!state.current.persisted) {
+  if (!state.current.persisted || state.current.evidence.persist.length === 0) {
     fail('Guardrail check failed: persistence was not marked complete.', 12);
   }
 
@@ -178,17 +178,12 @@ function main() {
     return;
   }
 
-  let args;
-  try {
-    args = parseArgs(argv);
-  } catch (err) {
-    fail(err.message, 1);
-  }
-
+  const args = parseArgs(argv);
   const cmd = args._[0];
   if (cmd === 'begin') return begin(args);
-  if (cmd === 'mark-context') return markContext();
-  if (cmd === 'mark-persist') return markPersist();
+  if (cmd === 'mark-context') return markContext(args);
+  if (cmd === 'mark-document') return markDocument(args);
+  if (cmd === 'mark-persist') return markPersist(args);
   if (cmd === 'check' || cmd === 'check-exit') return check();
   if (cmd === 'status') return status();
   if (cmd === 'reset') return reset();

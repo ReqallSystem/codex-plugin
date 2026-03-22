@@ -10,21 +10,30 @@ Reqall must do two things automatically on non-trivial work:
 
 The user should not need to ask for retrieve/store each time.
 
-## Automation Model
+## Capability Parity Status
 
-`codex-plugin` enforces this through `AGENTS.md` policy:
-- automatic pre-task context retrieval
-- automatic pre-response persistence
-- explicit reporting of persisted items and open follow-ups
+This package now ships the same core workflow surface as the Claude plugin:
+- context bootstrap guidance
+- incremental documentation guidance
+- final persistence guidance
+- review workflow guidance
+- local guardrail enforcement for context + persistence
+- installable MCP configuration examples
 
-This delivers the same end result as hook-based systems even when host-level lifecycle hooks are limited.
+Codex still relies on `AGENTS.md` + skills instead of host-native hooks, but the package now includes the same skill set and helper commands so the workflow can be applied consistently inside Codex.
 
 ## Included Files
 
 - `AGENTS.md` - mandatory autonomous memory workflow for Codex
-- `config.toml.example` - MCP server configuration
+- `skills/context/SKILL.md` - pre-task context retrieval workflow
+- `skills/document/SKILL.md` - post-tool incremental documentation workflow
+- `skills/persist/SKILL.md` - end-of-turn persistence workflow
+- `skills/review/SKILL.md` - review and triage workflow
+- `config.toml.example` - Codex MCP server configuration
+- `.mcp.json` / `mcp-servers.json` - portable MCP configuration examples
 - `GUARDRAIL.md` - command-level enforcement for context + persistence
-- `ROADMAP.md` - next capabilities (including native hook parity path)
+- `scripts/reqall-guardrail.mjs` - local state/evidence guardrail CLI
+- `scripts/reqall-codex-plugin.mjs` - helper CLI for context/document/persist/review prompts
 
 ## Setup
 
@@ -44,9 +53,13 @@ url = "${REQALL_URL}/mcp"
 Authorization = "Bearer ${REQALL_API_KEY}"
 ```
 
+Alternative portable config examples are included in `.mcp.json` and `mcp-servers.json`.
+
 3. Merge `AGENTS.md` into your project-level `AGENTS.md`.
 
-4. Set environment variables:
+4. Copy the included `skills/` into your Codex skills directory if you want explicit reusable skills in addition to the top-level `AGENTS.md` policy.
+
+5. Set environment variables:
 
 ```bash
 export REQALL_API_KEY="your-api-key"
@@ -59,16 +72,56 @@ Optional:
 export REQALL_PROJECT_NAME="org/repo-or-workspace"
 ```
 
-## P0 Guardrail
+## Helper CLI
 
-Use the guardrail CLI to enforce that non-trivial tasks both retrieved context and persisted memory:
+### Resolve the inferred project
+
+```bash
+npx reqall-codex-plugin project
+```
+
+### Print a context injection checklist
+
+```bash
+npx reqall-codex-plugin context --task "fix flaky auth retry"
+```
+
+### Print a pre-edit file-specific checklist
+
+```bash
+npx reqall-codex-plugin pre-edit --file src/auth.ts --task "fix flaky auth retry"
+```
+
+### Print an incremental documentation checklist
+
+```bash
+npx reqall-codex-plugin document --tool edit --files src/auth.ts,tests/auth.test.ts --summary "tightened retry backoff"
+```
+
+### Print a final persistence checklist
+
+```bash
+npx reqall-codex-plugin persist --task "fix flaky auth retry" --tests "npm test"
+```
+
+### Print a review workflow checklist
+
+```bash
+npx reqall-codex-plugin review --scope open
+```
+
+## Guardrail
+
+Use the guardrail CLI to enforce that non-trivial tasks both retrieved context and persisted memory, while also storing lightweight evidence of those steps:
 
 ```bash
 reqall-guardrail begin --task "short task summary"
 # ... run Reqall context retrieval ...
-reqall-guardrail mark-context
+reqall-guardrail mark-context --evidence "searched Reqall + reviewed open records"
+# ... capture incremental notes as work progresses ...
+reqall-guardrail mark-document --evidence "recorded changed files + verification"
 # ... complete work + Reqall persistence ...
-reqall-guardrail mark-persist
+reqall-guardrail mark-persist --evidence "upserted records + verification evidence"
 reqall-guardrail check
 ```
 

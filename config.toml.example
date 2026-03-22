@@ -1,9 +1,11 @@
 # Reqall MCP server configuration for Codex.
 # Copy into your Codex config.toml and set REQALL_API_KEY in the environment.
+# Portable JSON examples are also shipped in .mcp.json and mcp-servers.json.
 
 # Example:
 #   export REQALL_API_KEY="..."
 #   export REQALL_URL="https://reqall.net"
+#   export REQALL_PROJECT_NAME="org/repo-or-workspace"
 
 [mcp.reqall]
 # Use REQALL_URL so cloud/self-hosted endpoints both work.

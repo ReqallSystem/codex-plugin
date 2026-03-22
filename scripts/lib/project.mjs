@@ -2,8 +2,9 @@ import process from 'node:process';
 import { execFileSync } from 'node:child_process';
 import { basename } from 'node:path';
 
-export function parseArgs(argv) {
+export function parseArgs(argv, booleanFlags = []) {
   const args = { _: [] };
+  const allowedBooleanFlags = new Set(booleanFlags);
   for (let i = 0; i < argv.length; i += 1) {
     const token = argv[i];
     if (!token.startsWith('--')) {
@@ -14,6 +15,9 @@ export function parseArgs(argv) {
     const key = token.slice(2);
     const next = argv[i + 1];
     if (!next || next.startsWith('--')) {
+      if (!allowedBooleanFlags.has(key)) {
+        throw new Error(`Missing value for --${key}`);
+      }
       args[key] = true;
       continue;
     }

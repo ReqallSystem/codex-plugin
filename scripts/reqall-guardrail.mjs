@@ -22,7 +22,7 @@ function readState() {
   if (!existsSync(STATE_FILE)) {
     return null;
   }
-  return JSON.parse(readFileSync(STATE_FILE, 'utf8'));
+  return normalizeState(JSON.parse(readFileSync(STATE_FILE, 'utf8')));
 }
 
 function writeState(state) {
@@ -56,6 +56,70 @@ function usage() {
   console.log('  10 begin was not run');
   console.log('  11 context injection missing');
   console.log('  12 persistence missing');
+}
+
+function normalizeEvidenceEntries(entries, fallbackValue, enabled, timestamp) {
+  if (Array.isArray(entries)) {
+    return entries;
+  }
+  if (!enabled) {
+    return [];
+  }
+  return [{
+    at: timestamp ?? now(),
+    value: fallbackValue,
+  }];
+}
+
+function normalizeCurrentState(current, stateVersion) {
+  if (!current) {
+    return null;
+  }
+
+  return {
+    startedAt: current.startedAt ?? null,
+    task: typeof current.task === 'string' ? current.task : '',
+    project: typeof current.project === 'string' ? current.project : '',
+    nonTrivial: current.nonTrivial !== false,
+    contextInjected: current.contextInjected === true,
+    persisted: current.persisted === true,
+    documented: current.documented === true,
+    contextInjectedAt: current.contextInjectedAt ?? null,
+    persistedAt: current.persistedAt ?? null,
+    documentedAt: current.documentedAt ?? null,
+    evidence: {
+      context: normalizeEvidenceEntries(
+        current.evidence?.context,
+        stateVersion < VERSION ? 'migrated context confirmation from legacy guardrail state' : '',
+        current.contextInjected === true,
+        current.contextInjectedAt,
+      ),
+      document: normalizeEvidenceEntries(
+        current.evidence?.document,
+        stateVersion < VERSION ? 'migrated documentation confirmation from legacy guardrail state' : '',
+        current.documented === true,
+        current.documentedAt,
+      ),
+      persist: normalizeEvidenceEntries(
+        current.evidence?.persist,
+        stateVersion < VERSION ? 'migrated persistence confirmation from legacy guardrail state' : '',
+        current.persisted === true,
+        current.persistedAt,
+      ),
+    },
+  };
+}
+
+function normalizeState(state) {
+  if (!state) {
+    return null;
+  }
+
+  return {
+    version: VERSION,
+    updatedAt: state.updatedAt ?? now(),
+    current: normalizeCurrentState(state.current, state.version ?? 1),
+  };
 }
 
 function requireActiveState() {
@@ -178,7 +242,12 @@ function main() {
     return;
   }
 
-  const args = parseArgs(argv);
+  let args;
+  try {
+    args = parseArgs(argv, ['trivial']);
+  } catch (error) {
+    fail(error.message, 1);
+  }
   const cmd = args._[0];
   if (cmd === 'begin') return begin(args);
   if (cmd === 'mark-context') return markContext(args);

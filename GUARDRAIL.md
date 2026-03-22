@@ -41,7 +41,7 @@ npx reqall-codex-plugin review --scope open
 Without local install, use one-shot execution:
 
 ```bash
-npx -y @reqall/codex-plugin begin --task "fix auth retry bug"
+npx -y @reqall/codex-plugin reqall-guardrail begin --task "fix auth retry bug"
 ```
 
 ## Stored State

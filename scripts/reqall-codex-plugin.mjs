@@ -38,6 +38,13 @@ function normalizeFiles(rawFiles) {
     .map((file) => relative(process.cwd(), resolve(process.cwd(), file)) || '.');
 }
 
+function optionalPath(value) {
+  if (typeof value !== 'string' || !value.trim()) {
+    return '';
+  }
+  return relative(process.cwd(), resolve(process.cwd(), value)) || '.';
+}
+
 function projectCommand() {
   console.log(resolveProjectName());
 }
@@ -45,7 +52,7 @@ function projectCommand() {
 function contextCommand(args) {
   const project = resolveProjectName();
   const task = resolveTaskSummary(args);
-  const file = args.file ? relative(process.cwd(), resolve(process.cwd(), args.file)) || '.' : '';
+  const file = optionalPath(args.file);
 
   console.log('Automatic context injection checklist:');
   printList('', [
@@ -59,12 +66,12 @@ function contextCommand(args) {
 }
 
 function preEditCommand(args) {
-  if (!args.file) {
+  if (typeof args.file !== 'string' || !args.file.trim()) {
     fail('`pre-edit` requires --file <path>.');
   }
 
   const project = resolveProjectName();
-  const file = relative(process.cwd(), resolve(process.cwd(), args.file)) || '.';
+  const file = optionalPath(args.file);
   const task = resolveTaskSummary(args);
 
   console.log('Pre-edit Reqall bootstrap:');
@@ -133,7 +140,12 @@ function main() {
     return;
   }
 
-  const args = parseArgs(argv);
+  let args;
+  try {
+    args = parseArgs(argv);
+  } catch (error) {
+    fail(error.message);
+  }
   const command = args._[0];
 
   if (command === 'project') return projectCommand();

@@ -1,20 +1,26 @@
-# Reqall Review Skill For Codex
+---
+name: review
+description: Interactively review and triage open Reqall records for the current project.
+---
 
-Use this skill when the user wants to inspect or clean up Reqall memory.
+# Review Open Records
 
-## Goal
-
-Review open/recent records and keep memory state healthy.
+Walk through open records for the current project and update them based on
+user input.
 
 ## Workflow
 
-1. Resolve the project name.
-2. Call `reqall:list_records` for open records.
-3. Fetch details for the most relevant records with `reqall:get_record`.
-4. Identify stale, duplicate, or superseded records.
-5. Resolve or archive records when appropriate.
-6. Create follow-up links between related records.
-7. Summarize remaining open work.
+1. Identify the project and call `reqall:upsert_project`.
+2. Fetch records with `reqall:list_records` using `project_id` and
+   `status: "open"`. Apply a `kind` filter if the user requested one.
+3. Present records by kind, title, and status. Call `reqall:get_record` when
+   full body details are needed.
+4. Identify stale, duplicate, superseded, or still-actionable records.
+5. Ask whether each record should be resolved, archived, updated, or linked.
+6. Apply updates with `reqall:upsert_record`.
+7. Create relationships with `reqall:upsert_link` when useful.
+8. Use destructive deletion only when the user explicitly asks.
+9. Summarize records updated, resolved, archived, linked, and still open.
 
 ## Helper Command
 

@@ -1,20 +1,21 @@
 {
   "name": "@reqall/codex-plugin",
-  "version": "2026.3.22",
-  "description": "Reqall plugin for OpenAI Codex with context, documentation, persistence, and review workflows",
+  "version": "2026.4.1",
+  "description": "Reqall plugin for Codex with context, documentation, persistence, triage, review, and SLEEP workflows",
   "type": "module",
   "bin": {
     "reqall-guardrail": "scripts/reqall-guardrail.mjs",
     "reqall-codex-plugin": "scripts/reqall-codex-plugin.mjs"
   },
   "files": [
+    ".codex-plugin",
+    ".claude-plugin",
+    ".mcp.json",
     "README.md",
     "AGENTS.md",
     "config.toml.example",
-    ".mcp.json",
-    "mcp-servers.json",
-    ".claude-plugin",
     "GUARDRAIL.md",
+    "mcp-servers.json",
     "ROADMAP.md",
     "skills",
     "scripts"

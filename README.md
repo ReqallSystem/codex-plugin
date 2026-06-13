@@ -1,110 +1,111 @@
 # Reqall Codex Plugin
 
-Persistent semantic memory for OpenAI Codex agents.
+Persistent semantic memory for Codex agents.
 
-## Intent
+Reqall gives Codex a repeatable memory workflow:
 
-Reqall must do two things automatically on non-trivial work:
-1. Inject relevant context from prior memories before implementation.
-2. Persist new memories after implementation is complete.
+1. Gather relevant project context before non-trivial work.
+2. Complete the work using that context.
+3. Persist meaningful outcomes before the turn ends.
 
-The user should not need to ask for retrieve/store each time.
+## Capability Status
 
-## Capability Parity Status
+This package ships the same core workflow surface as the Claude plugin:
 
-This package now ships the same core workflow surface as the Claude plugin:
 - context bootstrap guidance
-- incremental documentation guidance
+- file-aware and incremental documentation guidance
 - final persistence guidance
-- review workflow guidance
-- local guardrail enforcement for context + persistence
+- triage, review, and SLEEP maintenance workflows
+- local guardrail enforcement for context and persistence
 - installable MCP configuration examples
 
-Codex still relies on `AGENTS.md` + skills instead of host-native hooks, but the package now includes the same skill set and helper commands so the workflow can be applied consistently inside Codex.
+Codex still relies on `AGENTS.md`, skills, helper commands, and guardrails
+instead of host-native lifecycle hooks.
 
-## Included Files
+## What Is Included
 
-- `AGENTS.md` - mandatory autonomous memory workflow for Codex
-- `skills/context/SKILL.md` - pre-task context retrieval workflow
-- `skills/document/SKILL.md` - post-tool incremental documentation workflow
-- `skills/persist/SKILL.md` - end-of-turn persistence workflow
-- `skills/review/SKILL.md` - review and triage workflow
-- `config.toml.example` - Codex MCP server configuration
-- `.mcp.json` / `mcp-servers.json` - portable MCP configuration examples
-- `GUARDRAIL.md` - command-level enforcement for context + persistence
+- `.codex-plugin/plugin.json` - Codex plugin manifest
+- `.claude-plugin/plugin.json` - compatibility manifest for hosts that still
+  read the older shape
+- `.mcp.json` and `mcp-servers.json` - Reqall MCP server configuration
+- `skills/` - reusable Reqall workflows:
+  - `reqall:context` - gather project memory before work
+  - `reqall:document` - capture one meaningful tool action or work item
+  - `reqall:persist` - persist all meaningful session outcomes
+  - `reqall:triage` - classify and prioritize incoming issues or requests
+  - `reqall:review` - review open project records
+  - `reqall:sleep` - run knowledge-graph maintenance
+- `AGENTS.md` - Codex autopilot policy for mandatory context and persistence
 - `scripts/reqall-guardrail.mjs` - local state/evidence guardrail CLI
-- `scripts/reqall-codex-plugin.mjs` - helper CLI for context/document/persist/review prompts
+- `scripts/reqall-codex-plugin.mjs` - helper CLI for workflow checklists
+- `config.toml.example` - manual MCP config for non-plugin installs
 
 ## Setup
 
-1. Install:
+Set your Reqall API key:
 
 ```bash
-npm i -D @reqall/codex-plugin
+export REQALL_API_KEY="your-api-key"
 ```
 
-2. Configure Reqall MCP in Codex config:
+The packaged plugin uses the cloud endpoint by default:
+
+```text
+https://www.reqall.net/mcp
+```
+
+For self-hosted Reqall, update `.mcp.json` or your Codex MCP config to point
+at `${REQALL_URL}/mcp`.
+
+## Manual Codex Config
+
+If you are not installing through the Codex plugin system, copy
+`config.toml.example` into your Codex config:
 
 ```toml
 [mcp.reqall]
-url = "${REQALL_URL}/mcp"
+url = "https://www.reqall.net/mcp"
 
 [mcp.reqall.headers]
 Authorization = "Bearer ${REQALL_API_KEY}"
 ```
 
-Alternative portable config examples are included in `.mcp.json` and `mcp-servers.json`.
-
-3. Merge `AGENTS.md` into your project-level `AGENTS.md`.
-
-4. Copy the included `skills/` into your Codex skills directory if you want explicit reusable skills in addition to the top-level `AGENTS.md` policy.
-
-5. Set environment variables:
-
-```bash
-export REQALL_API_KEY="your-api-key"
-export REQALL_URL="https://reqall.net"
-```
-
-Optional:
-
-```bash
-export REQALL_PROJECT_NAME="org/repo-or-workspace"
-```
+Then merge `AGENTS.md` into the project-level `AGENTS.md` so Codex runs the
+memory workflow automatically on non-trivial work.
 
 ## Helper CLI
 
-### Resolve the inferred project
+Resolve the inferred project:
 
 ```bash
 npx reqall-codex-plugin project
 ```
 
-### Print a context injection checklist
+Print a context injection checklist:
 
 ```bash
 npx reqall-codex-plugin context --task "fix flaky auth retry"
 ```
 
-### Print a pre-edit file-specific checklist
+Print a pre-edit file-specific checklist:
 
 ```bash
 npx reqall-codex-plugin pre-edit --file src/auth.ts --task "fix flaky auth retry"
 ```
 
-### Print an incremental documentation checklist
+Print an incremental documentation checklist:
 
 ```bash
 npx reqall-codex-plugin document --tool edit --files src/auth.ts,tests/auth.test.ts --summary "tightened retry backoff"
 ```
 
-### Print a final persistence checklist
+Print a final persistence checklist:
 
 ```bash
 npx reqall-codex-plugin persist --task "fix flaky auth retry" --tests "npm test"
 ```
 
-### Print a review workflow checklist
+Print a review workflow checklist:
 
 ```bash
 npx reqall-codex-plugin review --scope open
@@ -112,24 +113,34 @@ npx reqall-codex-plugin review --scope open
 
 ## Guardrail
 
-Use the guardrail CLI to enforce that non-trivial tasks both retrieved context and persisted memory, while also storing lightweight evidence of those steps:
+Use the guardrail CLI to enforce that non-trivial tasks both retrieved context
+and persisted memory, while also storing lightweight evidence of those steps:
 
 ```bash
 reqall-guardrail begin --task "short task summary"
-# ... run Reqall context retrieval ...
 reqall-guardrail mark-context --evidence "searched Reqall + reviewed open records"
-# ... capture incremental notes as work progresses ...
 reqall-guardrail mark-document --evidence "recorded changed files + verification"
-# ... complete work + Reqall persistence ...
 reqall-guardrail mark-persist --evidence "upserted records + verification evidence"
 reqall-guardrail check
 ```
 
-See `GUARDRAIL.md` for full details.
+Trivial tasks can be marked explicitly:
+
+```bash
+reqall-guardrail begin --trivial
+reqall-guardrail check
+```
+
+## Development
+
+This package is static and has no build step.
+
+```bash
+npm pack --dry-run
+python <plugin-creator>/scripts/validate_plugin.py .
+```
 
 ## Publish
-
-Static package, no build step:
 
 ```bash
 npm publish --access public

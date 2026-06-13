@@ -1,0 +1,42 @@
+{
+  "name": "reqall",
+  "version": "2026.4.1",
+  "description": "Persistent semantic memory workflows for Codex agents",
+  "author": {
+    "name": "ReqallSystem",
+    "url": "https://github.com/ReqallSystem"
+  },
+  "homepage": "https://github.com/ReqallSystem/codex-plugin",
+  "repository": "https://github.com/ReqallSystem/codex-plugin",
+  "license": "MIT",
+  "keywords": [
+    "rag",
+    "memory",
+    "project-context",
+    "issues",
+    "specifications",
+    "codex"
+  ],
+  "skills": "./skills",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Reqall",
+    "shortDescription": "Persistent project memory for Codex.",
+    "longDescription": "Reqall adds memory workflows to Codex: gather relevant project records before work, persist completed work, triage incoming issues, review open records, and maintain the knowledge graph.",
+    "developerName": "ReqallSystem",
+    "category": "Productivity",
+    "capabilities": [
+      "Memory",
+      "Project context",
+      "Issue tracking",
+      "Specifications"
+    ],
+    "websiteURL": "https://reqall.net",
+    "defaultPrompt": [
+      "Gather Reqall context for this task.",
+      "Persist this session's completed work.",
+      "Review open Reqall records for this project."
+    ],
+    "brandColor": "#4F46E5"
+  }
+}

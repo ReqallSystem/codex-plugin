@@ -1,22 +1,61 @@
-# Reqall Persistence Skill For Codex
+---
+name: persist
+description: Classify and persist all meaningful work completed in the current Codex session.
+---
 
-Use this skill before the final response for every non-trivial task.
+# Persist Work
 
-## Goal
+Before ending a non-trivial turn, classify the completed work and save it to
+Reqall. Create one record per distinct work item.
 
-Persist the completed work so the next agent can retrieve it automatically.
+## Classification
+
+| Work type | kind | status |
+| --- | --- | --- |
+| Bug fixed | issue | resolved |
+| New unfixed bug | issue | open |
+| Completed implementation | todo | resolved |
+| Follow-up task | todo | open |
+| Architecture decision | arch | resolved |
+| New or updated spec | spec | open |
+| Test or build evidence | test | resolved |
+| Ongoing verification evidence | test | active |
+| Trivial or no-op work | -- | skip |
+
+## Title Prefixes
+
+- Issues: `BUG:`, `TASK:`, `BLOCKER:`, `QUESTION:`
+- Specs and architecture: `ARCH:`, `API:`, `AUTH:`, `DATA:`, `UI:`
+- Features and refactors: `FEAT:`, `REFACTOR:`
+- Verification: `TEST:`
 
 ## Workflow
 
-1. Enumerate each completed work item from this turn.
-2. Upsert a Reqall record for each meaningful item.
-3. Persist verification evidence as `kind=test`.
-4. Persist unresolved work as open `issue`/`todo` records.
-5. Link related records where relationships are clear.
-6. Call `reqall:list_records` to sanity-check the resulting open set.
-7. In the final response, briefly report what was persisted and any remaining follow-ups.
+1. Identify the project.
+   Use `REQALL_PROJECT_NAME`, then git `origin` as `org/repo`, then the
+   current directory basename. Call `reqall:upsert_project` with that exact
+   name and keep the returned `project_id`.
+2. Enumerate work items.
+   Review files created or modified, bugs fixed or discovered, design
+   decisions, specs changed, tests or builds run, and follow-up tasks.
+3. Create or update records.
+   For each meaningful item, call `reqall:upsert_record` with `project_id`,
+   `kind`, `status`, `title`, and a body explaining what changed, why it
+   matters, and relevant file paths or command evidence.
+4. Link related records.
+   Use `reqall:search` to find related records. Call `reqall:upsert_link`
+   when relationships are clear:
+   - fixes or implementations use `implements`
+   - verification uses `tests`
+   - dependencies use `blocks`
+   - general associations use `related`
+   - parent/child specifications use `parent`
+5. Persist unresolved follow-ups as open `issue` or `todo` records.
+6. Call `reqall:list_records` for the project and ensure the completed work
+   was represented.
+7. Report what was persisted in the final response.
 
-## Helper Command
+## Helper Commands
 
 ```bash
 reqall-codex-plugin persist --task "short task summary"
@@ -26,7 +65,8 @@ reqall-guardrail check
 
 ## Failure Mode
 
-If Reqall MCP is unavailable:
+If Reqall MCP is unavailable or requires reauthentication:
+
 - continue the user task
 - state that automatic persistence could not run
 - do not claim that records were successfully stored

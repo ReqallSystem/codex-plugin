@@ -27,6 +27,7 @@ instead of host-native lifecycle hooks.
 - `.codex-plugin/plugin.json` - Codex plugin manifest
 - `.claude-plugin/plugin.json` - compatibility manifest for hosts that still
   read the older shape
+- `.app.json` - Reqall Codex App connector declaration for login/reauth
 - `.mcp.json` and `mcp-servers.json` - Reqall MCP server configuration
 - `skills/` - reusable Reqall workflows:
   - `reqall:context` - gather project memory before work
@@ -42,7 +43,11 @@ instead of host-native lifecycle hooks.
 
 ## Setup
 
-Set your Reqall API key:
+Install the plugin through Codex and connect the bundled Reqall app when
+prompted. The app connector is the preferred login path because Codex owns the
+interactive login and reauthentication flow.
+
+For environments that do not support Codex Apps, set your Reqall API key:
 
 ```bash
 export REQALL_API_KEY="your-api-key"
@@ -56,6 +61,20 @@ https://www.reqall.net/mcp
 
 For self-hosted Reqall, update `.mcp.json` or your Codex MCP config to point
 at `${REQALL_URL}/mcp`.
+
+## Authentication
+
+Codex has two supported Reqall auth paths in this package:
+
+1. **Codex App connector login** via `.app.json`.
+   This is the preferred path. Codex should prompt for Reqall connection during
+   install or use, and owns reauthentication when the connector expires.
+2. **Direct MCP bearer-token fallback** via `.mcp.json`.
+   This path reads `REQALL_API_KEY` from the environment and sends it as an
+   `Authorization: Bearer ...` header.
+
+The bundled connector is what enables a user-facing login path; the MCP header
+config is intentionally still available for local and self-hosted setups.
 
 ## Manual Codex Config
 

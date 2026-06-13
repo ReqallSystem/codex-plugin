@@ -6,6 +6,8 @@ non-trivial Codex work.
 Current status (2026-06-13):
 
 - Implemented: Codex plugin manifest in `.codex-plugin/plugin.json`.
+- Implemented: Reqall Codex App connector declaration in `.app.json` for
+  login/reauth through Codex.
 - Implemented: compatibility manifest in `.claude-plugin/plugin.json`.
 - Implemented: Reqall MCP companion config in `.mcp.json` and
   `mcp-servers.json`.

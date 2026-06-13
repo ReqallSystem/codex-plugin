@@ -18,15 +18,17 @@
     "codex"
   ],
   "skills": "./skills",
+  "apps": "./.app.json",
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Reqall",
     "shortDescription": "Persistent project memory for Codex.",
-    "longDescription": "Reqall adds memory workflows to Codex: gather relevant project records before work, persist completed work, triage incoming issues, review open records, and maintain the knowledge graph.",
+    "longDescription": "Reqall adds memory workflows to Codex: sign in with the Reqall connector, gather relevant project records before work, persist completed work, triage incoming issues, review open records, and maintain the knowledge graph.",
     "developerName": "ReqallSystem",
     "category": "Productivity",
     "capabilities": [
       "Memory",
+      "Login",
       "Project context",
       "Issue tracking",
       "Specifications"

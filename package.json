@@ -1,7 +1,7 @@
 {
   "name": "@reqall/codex-plugin",
-  "version": "2026.4.1",
-  "description": "Reqall plugin for Codex with context, documentation, persistence, triage, review, and SLEEP workflows",
+  "version": "2026.4.2",
+  "description": "Reqall plugin for Codex with connector login, context, documentation, persistence, triage, review, and SLEEP workflows",
   "type": "module",
   "bin": {
     "reqall-guardrail": "scripts/reqall-guardrail.mjs",
@@ -10,6 +10,7 @@
   "files": [
     ".codex-plugin",
     ".claude-plugin",
+    ".app.json",
     ".mcp.json",
     "README.md",
     "AGENTS.md",

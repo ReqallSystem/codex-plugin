@@ -1,0 +1,91 @@
+{
+  "description": "Reqall context and persistence guardrails for Codex.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/scripts/reqall-hook.mjs\"",
+            "timeout": 10,
+            "statusMessage": "Initializing Reqall memory",
+            "additionalContextLimit": 1500
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/scripts/reqall-hook.mjs\"",
+            "timeout": 10,
+            "statusMessage": "Starting Reqall task context",
+            "additionalContextLimit": 1500
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/scripts/reqall-hook.mjs\"",
+            "timeout": 10,
+            "statusMessage": "Checking Reqall context guardrail"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/scripts/reqall-hook.mjs\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/scripts/reqall-hook.mjs\"",
+            "timeout": 10,
+            "additionalContextLimit": 1000
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/scripts/reqall-hook.mjs\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/scripts/reqall-hook.mjs\"",
+            "timeout": 10,
+            "statusMessage": "Verifying Reqall persistence"
+          }
+        ]
+      }
+    ]
+  }
+}

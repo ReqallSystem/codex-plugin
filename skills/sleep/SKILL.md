@@ -18,36 +18,48 @@ SLEEP is rate-limited to once per 24 hours per project.
    `origin`, or the current directory basename. Call `reqall:upsert_project`
    with the exact name and keep `project_id`.
 
-2. Fetch candidates.
+2. Load the maintenance context.
+   Call `reqall:search` for recent maintenance, consolidation, and open-risk
+   records, then call `reqall:list_records` with `status: "open"`. This also
+   satisfies the lifecycle context gate before the stateful SLEEP audit.
+
+3. Fetch candidates.
    Call `reqall:sleep_candidates` with `project_id`. If rate-limited, report
    the next eligible time and stop.
 
-3. Report the candidate summary before applying changes:
+4. Report the candidate summary before applying changes:
    - Consolidation clusters and total records in them
    - Rollup candidates
    - Split candidates
    - Cross-link pairs
 
-4. Process consolidation clusters.
+5. Process consolidation clusters.
    Merge records only when the synthesized record can preserve all durable
    details. Use the most specific title, `kind: "arch"`, and
    `status: "resolved"` for synthesized durable knowledge.
 
-5. Process rollup candidates.
+6. Process rollup candidates.
    Compact records with lasting value. Skip trivial or ephemeral records.
 
-6. Process split candidates.
+7. Process split candidates.
    Split active records only when they contain two or more separable topics.
    Keep focused records intact even when they are long.
 
-7. Process cross-link candidates.
+8. Process cross-link candidates.
    Confirm links when the relationship is useful for future discovery.
    Reject superficial similarity.
 
-8. Apply operations.
+9. Apply operations.
    Call `reqall:sleep_apply` with the full batch of confirmed operations.
 
-9. Report results:
+10. Persist the maintenance outcome.
+   Call `reqall:upsert_record` with `kind: "todo"`, `status: "resolved"`, a
+   `TASK: SLEEP maintenance` title, and a concise body containing the applied
+   operation counts and unresolved errors. Then call `reqall:list_records` to
+   verify the work-item record. SLEEP operations and links alone do not satisfy
+   final session persistence.
+
+11. Report results:
    - Clusters consolidated
    - Records compacted
    - Records split

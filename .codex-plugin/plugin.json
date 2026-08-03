@@ -1,6 +1,6 @@
 {
   "name": "reqall",
-  "version": "2026.4.1",
+  "version": "2026.8.0",
   "description": "Persistent semantic memory workflows for Codex agents",
   "author": {
     "name": "ReqallSystem",
@@ -22,7 +22,7 @@
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Reqall",
-    "shortDescription": "Persistent project memory for Codex.",
+    "shortDescription": "Project memory for Codex",
     "longDescription": "Reqall adds memory workflows to Codex: sign in with the Reqall connector, gather relevant project records before work, persist completed work, triage incoming issues, review open records, and maintain the knowledge graph.",
     "developerName": "ReqallSystem",
     "category": "Productivity",

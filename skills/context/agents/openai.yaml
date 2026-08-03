@@ -1,0 +1,14 @@
+interface:
+  display_name: "Reqall Context"
+  short_description: "Load relevant project memory before work"
+  default_prompt: "Use Reqall context to initialize this project and retrieve records relevant to my task."
+  brand_color: "#4F46E5"
+policy:
+  allow_implicit_invocation: true
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "reqall"
+      description: "Reqall project memory tools"
+      transport: "streamable_http"
+      url: "https://www.reqall.net/mcp"

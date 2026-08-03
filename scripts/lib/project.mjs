@@ -28,10 +28,10 @@ export function parseArgs(argv, booleanFlags = []) {
   return args;
 }
 
-function safeExec(args) {
+function safeExec(args, cwd = process.cwd()) {
   try {
     return execFileSync(args[0], args.slice(1), {
-      cwd: process.cwd(),
+      cwd,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
     }).trim();
@@ -59,18 +59,18 @@ function normalizeRemote(remoteUrl) {
   }
 }
 
-export function resolveProjectName() {
-  if (process.env.REQALL_PROJECT_NAME) {
-    return process.env.REQALL_PROJECT_NAME;
+export function resolveProjectName(cwd = process.cwd(), env = process.env) {
+  if (env.REQALL_PROJECT_NAME) {
+    return env.REQALL_PROJECT_NAME;
   }
 
-  const remoteUrl = safeExec(['git', 'remote', 'get-url', 'origin']);
+  const remoteUrl = safeExec(['git', 'remote', 'get-url', 'origin'], cwd);
   const normalizedRemote = normalizeRemote(remoteUrl);
   if (normalizedRemote) {
     return normalizedRemote;
   }
 
-  return basename(process.cwd());
+  return basename(cwd);
 }
 
 export function resolveTaskSummary(args) {

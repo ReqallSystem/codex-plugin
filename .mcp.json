@@ -3,9 +3,7 @@
     "reqall": {
       "type": "http",
       "url": "https://www.reqall.net/mcp",
-      "headers": {
-        "Authorization": "Bearer ${REQALL_API_KEY}"
-      }
+      "bearer_token_env_var": "REQALL_API_KEY"
     }
   }
 }

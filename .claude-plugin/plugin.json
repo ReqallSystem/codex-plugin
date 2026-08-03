@@ -1,6 +1,6 @@
 {
   "name": "@reqall/codex-plugin",
-  "version": "2026.4.2",
+  "version": "2026.8.0",
   "description": "Reqall memory automation bundle for Codex with context, document, persist, triage, review, and SLEEP skills.",
   "skills": [
     "skills/context/SKILL.md",

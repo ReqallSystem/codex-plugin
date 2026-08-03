@@ -59,9 +59,12 @@ Reqall. Create one record per distinct work item.
 
 ```bash
 reqall-codex-plugin persist --task "short task summary"
-reqall-guardrail mark-persist --evidence "persisted records + verification evidence"
 reqall-guardrail check
 ```
+
+Trusted plugin hooks capture successful Reqall persistence tool-call IDs. The
+guardrail passes only after a persistence write and a later `list_records`
+verification; a free-form completion claim does not qualify.
 
 ## Failure Mode
 

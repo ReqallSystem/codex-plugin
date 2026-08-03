@@ -48,5 +48,8 @@ Create or update a record for:
 
 ```bash
 reqall-codex-plugin document --tool edit --files src/a.js,src/b.js --summary "brief summary"
-reqall-guardrail mark-document --evidence "captured intermediate implementation notes"
 ```
+
+Trusted plugin hooks capture concrete mutation and test evidence
+automatically; raw commands and tool results are not persisted in guardrail
+state.

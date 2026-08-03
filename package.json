@@ -1,8 +1,26 @@
 {
   "name": "@reqall/codex-plugin",
-  "version": "2026.4.2",
-  "description": "Reqall plugin for Codex with connector login, context, documentation, persistence, triage, review, and SLEEP workflows",
+  "version": "2026.8.0",
+  "description": "Reqall memory autopilot for Codex with lifecycle hooks, MCP context, persistence, triage, review, and SLEEP workflows",
   "type": "module",
+  "homepage": "https://github.com/ReqallSystem/codex-plugin",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ReqallSystem/codex-plugin.git"
+  },
+  "keywords": [
+    "codex",
+    "mcp",
+    "memory",
+    "project-context",
+    "rag"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test test/guardrail.test.js test/hooks.test.js"
+  },
   "bin": {
     "reqall-guardrail": "scripts/reqall-guardrail.mjs",
     "reqall-codex-plugin": "scripts/reqall-codex-plugin.mjs"
@@ -18,6 +36,7 @@
     "GUARDRAIL.md",
     "mcp-servers.json",
     "ROADMAP.md",
+    "hooks",
     "skills",
     "scripts"
   ],

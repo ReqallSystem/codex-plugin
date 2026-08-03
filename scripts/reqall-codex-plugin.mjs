@@ -62,6 +62,7 @@ function contextCommand(args) {
     'Call `reqall:list_records` with `status: "open"`.',
     'Call `reqall:get_record` for the top relevant records when details matter.',
     'If changing tracked behavior, call `reqall:list_links` and `reqall:impact`.',
+    'Trusted Reqall hooks capture successful tool-call IDs automatically.',
   ]);
 }
 
@@ -98,6 +99,7 @@ function documentCommand(args) {
     'Draft concise Reqall record payloads for completed implementation, tests, and follow-ups.',
     'Capture unresolved failures as open issue/todo records.',
     'Link related records when the changed files share a component or decision.',
+    'Do not copy raw commands, credentials, or complete tool results into guardrail state.',
   ]);
 }
 
@@ -115,6 +117,7 @@ function persistCommand(args) {
     `Persist follow-ups${args['follow-up'] ? `: ${args['follow-up']}` : ' if any remain unresolved'}.`,
     `Persist test/build evidence${args.tests ? `: ${args.tests}` : ''}.`,
     'List records again to sanity-check what remains open.',
+    'Let trusted hooks capture the persistence write and verification tool-call IDs.',
   ]);
 }
 

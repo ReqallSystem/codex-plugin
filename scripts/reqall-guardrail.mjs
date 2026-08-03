@@ -1,34 +1,17 @@
 #!/usr/bin/env node
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import {
+  EXIT_INVALID_EVIDENCE,
+  beginGuardrail,
+  evaluateGuardrail,
+  listGuardrails,
+  loadGuardrail,
+  recordToolEvidence,
+  relativeStateLocation,
+  reqallOperation,
+  resetGuardrail,
+} from './lib/guardrail-state.mjs';
 import { parseArgs, resolveProjectName } from './lib/project.mjs';
-
-const STATE_DIR = resolve(process.cwd(), '.reqall');
-const STATE_FILE = resolve(STATE_DIR, 'codex-guardrail.json');
-const VERSION = 2;
-
-function now() {
-  return new Date().toISOString();
-}
-
-function ensureStateDir() {
-  if (!existsSync(STATE_DIR)) {
-    mkdirSync(STATE_DIR, { recursive: true });
-  }
-}
-
-function readState() {
-  if (!existsSync(STATE_FILE)) {
-    return null;
-  }
-  return normalizeState(JSON.parse(readFileSync(STATE_FILE, 'utf8')));
-}
-
-function writeState(state) {
-  ensureStateDir();
-  writeFileSync(STATE_FILE, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
-}
 
 function fail(message, code = 1) {
   console.error(`[reqall-guardrail] ${message}`);
@@ -43,196 +26,103 @@ function usage() {
   console.log('Reqall Codex Guardrail');
   console.log();
   console.log('Usage:');
-  console.log('  reqall-guardrail begin [--task "text"] [--project "name"] [--trivial]');
-  console.log('  reqall-guardrail mark-context [--evidence "text"]');
-  console.log('  reqall-guardrail mark-document [--evidence "text"]');
-  console.log('  reqall-guardrail mark-persist [--evidence "text"]');
-  console.log('  reqall-guardrail check');
-  console.log('  reqall-guardrail status');
-  console.log('  reqall-guardrail reset');
+  console.log('  reqall-guardrail begin [--task "text"] [--project "name"] [--session id] [--turn id] [--trivial]');
+  console.log('  reqall-guardrail mark-context --tool name --tool-use-id id [--session id] [--turn id]  # diagnostic only');
+  console.log('  reqall-guardrail mark-document --tool name --tool-use-id id [--session id] [--turn id] # diagnostic only');
+  console.log('  reqall-guardrail mark-persist --tool name --tool-use-id id [--session id] [--turn id]  # diagnostic only');
+  console.log('  reqall-guardrail check [--session id] [--turn id]');
+  console.log('  reqall-guardrail status [--session id] [--turn id] [--all]');
+  console.log('  reqall-guardrail reset [--session id] [--turn id]');
   console.log();
-  console.log('Exit codes for `check`:');
-  console.log('  0  pass');
-  console.log('  10 begin was not run');
-  console.log('  11 context injection missing');
-  console.log('  12 persistence missing');
+  console.log('Exit codes for `check`: 0 pass or declared degraded mode, 10 no begin, 11 context missing, 12 persistence missing, 13 stale.');
+  console.log('Exit code 14 means a mark command did not provide concrete diagnostic metadata.');
+  console.log('Only trusted PostToolUse hook evidence can satisfy `check`; CLI marks never qualify.');
 }
 
-function normalizeEvidenceEntries(entries, fallbackValue, enabled, timestamp) {
-  if (Array.isArray(entries)) {
-    return entries;
-  }
-  if (!enabled) {
-    return [];
-  }
-  return [{
-    at: timestamp ?? now(),
-    value: fallbackValue,
-  }];
-}
-
-function normalizeCurrentState(current, stateVersion) {
-  if (!current) {
-    return null;
-  }
-
+function identityArgs(args) {
   return {
-    startedAt: current.startedAt ?? null,
-    task: typeof current.task === 'string' ? current.task : '',
-    project: typeof current.project === 'string' ? current.project : '',
-    nonTrivial: current.nonTrivial !== false,
-    contextInjected: current.contextInjected === true,
-    persisted: current.persisted === true,
-    documented: current.documented === true,
-    contextInjectedAt: current.contextInjectedAt ?? null,
-    persistedAt: current.persistedAt ?? null,
-    documentedAt: current.documentedAt ?? null,
-    evidence: {
-      context: normalizeEvidenceEntries(
-        current.evidence?.context,
-        stateVersion < VERSION ? 'migrated context confirmation from legacy guardrail state' : '',
-        current.contextInjected === true,
-        current.contextInjectedAt,
-      ),
-      document: normalizeEvidenceEntries(
-        current.evidence?.document,
-        stateVersion < VERSION ? 'migrated documentation confirmation from legacy guardrail state' : '',
-        current.documented === true,
-        current.documentedAt,
-      ),
-      persist: normalizeEvidenceEntries(
-        current.evidence?.persist,
-        stateVersion < VERSION ? 'migrated persistence confirmation from legacy guardrail state' : '',
-        current.persisted === true,
-        current.persistedAt,
-      ),
-    },
+    sessionId: args.session || process.env.REQALL_SESSION_ID || process.env.CODEX_SESSION_ID,
+    turnId: args.turn || process.env.REQALL_TURN_ID || process.env.CODEX_TURN_ID,
+    task: args.task || '',
+    cwd: process.cwd(),
+    env: process.env,
   };
-}
-
-function normalizeState(state) {
-  if (!state) {
-    return null;
-  }
-
-  return {
-    version: VERSION,
-    updatedAt: state.updatedAt ?? now(),
-    current: normalizeCurrentState(state.current, state.version ?? 1),
-  };
-}
-
-function requireActiveState() {
-  const state = readState();
-  if (!state || !state.current) {
-    fail('No active task state. Run `begin` first.', 10);
-  }
-  return state;
-}
-
-function appendEvidence(bucket, evidence) {
-  if (!evidence) {
-    return bucket;
-  }
-  return [...bucket, { at: now(), value: evidence }];
 }
 
 function begin(args) {
-  const nonTrivial = args.trivial ? false : true;
-  const project = typeof args.project === 'string' && args.project.trim() ? args.project.trim() : resolveProjectName();
-  const state = {
-    version: VERSION,
-    updatedAt: now(),
-    current: {
-      startedAt: now(),
-      task: typeof args.task === 'string' ? args.task : '',
-      project,
-      nonTrivial,
-      contextInjected: false,
-      persisted: false,
-      documented: false,
-      contextInjectedAt: null,
-      persistedAt: null,
-      documentedAt: null,
-      evidence: {
-        context: [],
-        document: [],
-        persist: [],
-      },
-    },
-  };
-  writeState(state);
-  ok(nonTrivial ? `Started non-trivial task guardrail for ${project}.` : `Started trivial task guardrail for ${project}.`);
+  const project = typeof args.project === 'string' && args.project.trim()
+    ? args.project.trim()
+    : resolveProjectName();
+  const state = beginGuardrail({
+    ...identityArgs(args),
+    project,
+    nonTrivial: args.trivial !== true,
+  });
+  ok(`${state.nonTrivial ? 'Started non-trivial' : 'Started trivial'} task guardrail for ${project}.`);
+  ok(`State: ${relativeStateLocation()}`);
 }
 
-function markContext(args) {
-  const state = requireActiveState();
-  state.current.contextInjected = true;
-  state.current.contextInjectedAt = now();
-  state.current.evidence.context = appendEvidence(state.current.evidence.context, args.evidence || args.note || 'manual context confirmation');
-  state.updatedAt = now();
-  writeState(state);
-  ok('Marked context injection as complete.');
-}
-
-function markDocument(args) {
-  const state = requireActiveState();
-  state.current.documented = true;
-  state.current.documentedAt = now();
-  state.current.evidence.document = appendEvidence(state.current.evidence.document, args.evidence || args.note || 'manual documentation confirmation');
-  state.updatedAt = now();
-  writeState(state);
-  ok('Marked incremental documentation as complete.');
-}
-
-function markPersist(args) {
-  const state = requireActiveState();
-  state.current.persisted = true;
-  state.current.persistedAt = now();
-  state.current.evidence.persist = appendEvidence(state.current.evidence.persist, args.evidence || args.note || 'manual persistence confirmation');
-  state.updatedAt = now();
-  writeState(state);
-  ok('Marked persistence as complete.');
-}
-
-function check() {
-  const state = readState();
-  if (!state || !state.current) {
-    fail('Guardrail check failed: `begin` was not run.', 10);
+function mark(args, phase) {
+  const toolName = args.tool || (args.operation ? `reqall:${args.operation}` : '');
+  const toolUseId = args['tool-use-id'] || args['operation-id'];
+  const operation = reqallOperation(toolName) || (phase === 'document' && toolName ? 'document' : '');
+  if (!toolName || !toolUseId || !operation) {
+    fail(
+      'Concrete evidence requires --tool <Reqall tool name> and --tool-use-id <actual tool-call id>; free-form --evidence is only descriptive and cannot satisfy the guardrail.',
+      EXIT_INVALID_EVIDENCE,
+    );
   }
+  const state = recordToolEvidence(
+    { ...identityArgs(args), allowCurrent: !args.turn },
+    {
+      phase,
+      operation,
+      toolName,
+      toolUseId,
+      success: true,
+      source: 'cli',
+    },
+  );
+  if (!state) fail('No active task state. Run `begin` first.', 10);
+  const evaluation = evaluateGuardrail(state);
+  ok(`Recorded diagnostic ${phase} metadata for ${operation} (${toolUseId}).`);
+  ok('CLI marks never satisfy the guardrail; only trusted PostToolUse evidence qualifies.');
+  if (!evaluation.ok) ok(`Still required: ${evaluation.reason}.`);
+}
 
-  if (!state.current.nonTrivial) {
-    ok('Guardrail check passed (trivial task).');
+function check(args) {
+  const state = loadGuardrail({ ...identityArgs(args), allowCurrent: !args.turn });
+  const evaluation = evaluateGuardrail(state);
+  if (!evaluation.ok) fail(`Guardrail check failed: ${evaluation.reason}.`, evaluation.code);
+  if (evaluation.degraded) {
+    ok(`Guardrail completed in degraded mode (${evaluation.reason}); disclose that Reqall context and persistence did not run.`);
     return;
   }
-
-  if (!state.current.contextInjected || state.current.evidence.context.length === 0) {
-    fail('Guardrail check failed: context injection was not marked complete.', 11);
-  }
-
-  if (!state.current.persisted || state.current.evidence.persist.length === 0) {
-    fail('Guardrail check failed: persistence was not marked complete.', 12);
-  }
-
-  ok('Guardrail check passed (context + persistence complete).');
+  ok(`Guardrail check passed (${evaluation.reason}).`);
 }
 
-function status() {
-  const state = readState();
-  if (!state || !state.current) {
+function status(args) {
+  if (args.all) {
+    console.log(JSON.stringify(listGuardrails(), null, 2));
+    return;
+  }
+  const state = loadGuardrail({ ...identityArgs(args), allowCurrent: !args.turn });
+  if (!state) {
     ok('No active guardrail state.');
     return;
   }
   console.log(JSON.stringify(state, null, 2));
 }
 
-function reset() {
-  writeState({
-    version: VERSION,
-    updatedAt: now(),
-    current: null,
-  });
-  ok('Reset guardrail state.');
+function reset(args) {
+  const options = { ...identityArgs(args), allowCurrent: !args.turn };
+  const state = loadGuardrail(options);
+  if (!state) {
+    ok('No active guardrail state.');
+    return;
+  }
+  resetGuardrail(options);
+  ok('Reset guardrail state for the selected task.');
 }
 
 function main() {
@@ -244,20 +134,19 @@ function main() {
 
   let args;
   try {
-    args = parseArgs(argv, ['trivial']);
+    args = parseArgs(argv, ['trivial', 'all']);
   } catch (error) {
     fail(error.message, 1);
   }
-  const cmd = args._[0];
-  if (cmd === 'begin') return begin(args);
-  if (cmd === 'mark-context') return markContext(args);
-  if (cmd === 'mark-document') return markDocument(args);
-  if (cmd === 'mark-persist') return markPersist(args);
-  if (cmd === 'check' || cmd === 'check-exit') return check();
-  if (cmd === 'status') return status();
-  if (cmd === 'reset') return reset();
-
-  fail(`Unknown command: ${cmd}`, 1);
+  const command = args._[0];
+  if (command === 'begin') return begin(args);
+  if (command === 'mark-context') return mark(args, 'context');
+  if (command === 'mark-document') return mark(args, 'document');
+  if (command === 'mark-persist') return mark(args, 'persist');
+  if (command === 'check' || command === 'check-exit') return check(args);
+  if (command === 'status') return status(args);
+  if (command === 'reset') return reset(args);
+  fail(`Unknown command: ${command}`, 1);
 }
 
 main();

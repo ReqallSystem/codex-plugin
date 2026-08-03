@@ -17,6 +17,7 @@ with host-specific prefixes, but they correspond to these operations:
 - `reqall:upsert_record`
 - `reqall:get_record`
 - `reqall:list_records`
+- `reqall:list_projects`
 - `reqall:upsert_link`
 - `reqall:list_links`
 - `reqall:impact`
@@ -24,6 +25,10 @@ with host-specific prefixes, but they correspond to these operations:
 - `reqall:sleep_apply`
 - `reqall:delete_record` (only if user explicitly asks)
 - `reqall:delete_link` (only if user explicitly asks)
+- `reqall:delete_project` (only if user explicitly asks)
+- `reqall:share_project`
+- `reqall:revoke_share`
+- `reqall:list_shares`
 
 ## Skills
 
@@ -57,22 +62,54 @@ Skip or minimize for trivial requests:
 - formatting-only output
 - one-line informational asks
 
-## Guardrail Commands
+## Lifecycle Hooks And Guardrail
 
-If `reqall-guardrail` is available, enforce the flow with commands:
+When the plugin hooks are trusted, they enforce this flow automatically:
 
-1. Task start:
-   - non-trivial: `reqall-guardrail begin --task "<user request summary>"`
-   - trivial: `reqall-guardrail begin --trivial`
-2. After Phase A completes:
-   `reqall-guardrail mark-context --evidence "searched Reqall + reviewed open records"`
-3. After incremental notes are captured:
-   `reqall-guardrail mark-document --evidence "captured changed files + verification notes"`
-4. After Phase B completes:
-   `reqall-guardrail mark-persist --evidence "persisted records + verification evidence"`
-5. Before final response: `reqall-guardrail check`
+1. `UserPromptSubmit` starts session/turn/task-isolated state and injects the
+   context contract.
+2. `PreToolUse` sees every local and MCP tool, treats unknown tools as
+   mutating, and denies mutations until successful `upsert_project`, `search`,
+   and `list_records` calls are observed.
+3. `PostToolUse` sees the same tool stream and captures concrete Reqall
+   tool-call IDs plus mutation/test evidence without storing raw commands or
+   results.
+4. `SubagentStart` and `SubagentStop` share status and capture notes; the root
+   agent remains responsible for final persistence.
+5. `Stop` requires a successful `upsert_record` followed by `list_records`
+   verification. Links and SLEEP operations are supplemental. It continues an
+   incomplete turn at most once.
 
-If `check` fails, finish missing steps before responding.
+Do not replace concrete tool evidence with free-form claims. Manual
+`mark-context`, `mark-document`, and `mark-persist` commands are diagnostic
+only and never satisfy the guardrail, even when they receive a tool-looking
+identifier. Only evidence emitted by the trusted `PostToolUse` hook qualifies.
+Use `reqall-guardrail status` or `reqall-guardrail check` for diagnostics.
+
+Before context is complete, Bash uses a conservative read-only allowlist.
+Only non-executing repository inspection may proceed. Test runners execute
+repository code and are denied along with unknown commands, shell composition,
+interpreters, and write-capable commands. Unknown local and MCP tools are also
+denied unless they are on the small exact host/read allowlist. The
+`functions.exec` wrapper is allowed because Codex emits its nested tool calls
+individually for hook enforcement; do not infer safety by parsing wrapper
+source.
+
+A failed context call enters bounded degraded mode only when its trusted
+`PostToolUse` result clearly identifies authentication, network, or upstream
+service unavailability. The state stores an outage category and digests, not
+raw error text. Work may continue, `Stop` does not force a continuation, and
+the final response must disclose that Reqall context and persistence did not
+run. Ordinary validation or application failures remain blocked. Each new
+turn starts fresh, and successful context calls restore the normal persistence
+contract.
+
+Lifecycle hooks require a system `node` executable at version 20 or newer. A
+marketplace or source plugin install does not install Node or enforce the npm
+`engines` field. If the command is missing, the hook command fails and the
+host cannot provide automatic enforcement. Standalone Reqall MCP setup does
+not require Node. If hooks are unavailable or untrusted, the Phase A and Phase
+B workflow below is still mandatory.
 
 ## Phase A: Automatic Context Injection
 
@@ -146,6 +183,9 @@ Never rely on the user to remind you to persist.
 
 - Prefer status transitions (`open` -> `resolved` or `archived`) over
   deletion.
-- Use destructive deletes only on explicit user request.
+- Use destructive record, link, or project deletion only on explicit user
+  request.
+- Share or revoke project access only when the user's request authorizes that
+  permission change.
 - If Reqall MCP is unavailable, continue the user task and state clearly
   that automatic context or persistence could not run.

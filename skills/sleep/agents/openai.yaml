@@ -1,0 +1,14 @@
+interface:
+  display_name: "Reqall SLEEP"
+  short_description: "Maintain and consolidate project memory"
+  default_prompt: "Use Reqall SLEEP to review maintenance candidates and apply safe knowledge-graph improvements."
+  brand_color: "#4F46E5"
+policy:
+  allow_implicit_invocation: false
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "reqall"
+      description: "Reqall project memory tools"
+      transport: "streamable_http"
+      url: "https://www.reqall.net/mcp"

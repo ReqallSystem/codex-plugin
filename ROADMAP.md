@@ -1,64 +1,68 @@
 # Codex Plugin Capability Plan
 
-Primary objective: guaranteed automatic context injection and persistence for
+Primary objective: reliable automatic context injection and persistence for
 non-trivial Codex work.
 
-Current status (2026-06-13):
+## Implemented In 2026.8.0
 
-- Implemented: Codex plugin manifest in `.codex-plugin/plugin.json`.
-- Implemented: Reqall Codex App connector declaration in `.app.json` for
-  login/reauth through Codex.
-- Implemented: compatibility manifest in `.claude-plugin/plugin.json`.
-- Implemented: Reqall MCP companion config in `.mcp.json` and
-  `mcp-servers.json`.
-- Implemented: reusable skills for context, documentation, persistence,
-  triage, review, and SLEEP maintenance.
-- Implemented: helper CLI (`reqall-codex-plugin`) for context, pre-edit,
-  document, persist, and review checklists.
-- Implemented: local guardrail CLI (`reqall-guardrail`) with evidence-backed
-  begin/context/document/persist/check state.
-- Implemented: `AGENTS.md` autopilot policy for hosts without lifecycle
-  hooks.
+- Default plugin lifecycle hooks in `hooks/hooks.json`; no manifest override
+  is required.
+- Start-of-session and prompt-level Reqall context contracts.
+- Pre-mutation gating with a conservative read-only Bash allowlist and
+  default-deny handling for unknown shell/tool operations.
+- Machine-captured `PostToolUse` evidence keyed by Codex tool-call ID.
+- Bounded, disclosure-first degraded mode for concrete Reqall auth, network,
+  and upstream service outages.
+- Root-owned persistence with bounded `Stop` continuation.
+- Subagent context sharing and completion notes without allowing a subagent to
+  satisfy final persistence.
+- Session/turn/task-isolated, fresh, atomic, concurrency-safe guardrail state
+  under `PLUGIN_DATA`, with a safe project fallback.
+- Native Codex MCP config and OAuth documentation, plus bearer-token fallback.
+- `agents/openai.yaml` invocation policy and Reqall MCP dependency metadata for
+  every skill.
+- Behavioral Node tests and package/plugin validation commands.
 
-## Remaining Gaps To Native Hook Parity
+## P1: Server Contract And Recall Quality
 
-1. Codex host lifecycle hooks
-   - Map start-of-task to context retrieval when Codex exposes stable hooks.
-   - Map pre-edit events to file-aware retrieval.
-   - Map post-tool/write events to incremental documentation.
-   - Map end-of-task to mandatory persistence.
-   - Map subagent completion to plan/result persistence.
+1. Structured MCP output
+   - Add output schemas and `structuredContent` while retaining concise text.
+   - Add accurate read-only, destructive, open-world, and OAuth metadata.
 
-2. Verified Reqall MCP audit trail
-   - Replace manual evidence strings with machine-verified MCP operation
-     traces.
-   - Attach created/updated record identifiers to guardrail state.
+2. Diff-aware record drafting
+   - Convert mutation evidence into focused record proposals without storing
+     raw commands or tool results.
 
-## P1: Quality And Recall Depth
+3. Verification evidence normalization
+   - Convert noisy test/build outcomes into concise test records and links.
 
-1. Diff-aware record drafting
-   - Draft structured `upsert_record` payloads from changed files and command
-     outcomes.
-
-2. Verification evidence normalizer
-   - Convert noisy test/build output into concise `test` records and links.
-
-3. Open-risk extractor
-   - Detect unresolved TODOs, failures, or skipped verification and persist
-     them as open issue/todo records.
-
-4. Review assistant automation
-   - Recommend stale, duplicate, and open-record actions during review mode.
+4. Open-risk extraction
+   - Detect unresolved failures, skipped verification, and follow-up tasks.
 
 ## P2: Integration
 
-1. PR merge sync
-   - Link merged PR metadata to Reqall records.
+1. MCP App UI
+   - Add optional open-record review, impact graph, and SLEEP confirmation UI.
 
-2. Cross-project impact hints
-   - Suggest project/project and record/record links for shared component
-     changes.
+2. PR merge synchronization
+   - Link merged pull-request metadata to Reqall records.
 
-3. Mode presets
-   - Fast fix, deep refactor, and release hardening profiles for memory
-     density.
+3. Cross-project impact hints
+   - Suggest useful project and record links for shared components.
+
+4. Public directory readiness
+   - Supply legal/support URLs, visual assets, review test cases, demo material,
+     and current MCP metadata scans.
+
+## Known Boundaries
+
+- Plugin hooks run only after the user reviews and trusts their current hash.
+- Lifecycle hooks require system Node.js 20 or newer; marketplace installation
+  does not provision or enforce that runtime. Standalone MCP use is Node-free.
+- Tool hooks cover Codex local function and MCP calls, but specialized hosted
+  tool paths can opt out of lifecycle interception.
+- The pre-context shell allowlist intentionally denies unfamiliar inspection
+  commands until Reqall context is complete; add safe commands only with
+  behavioral tests.
+- `SessionEnd` is advisory and cannot keep a turn alive, so final enforcement
+  remains on `Stop`.

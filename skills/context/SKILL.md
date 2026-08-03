@@ -32,8 +32,10 @@ Load project context from Reqall before starting non-trivial work.
 ```bash
 reqall-codex-plugin context --task "short task summary"
 reqall-codex-plugin pre-edit --file path/to/file --task "short task summary"
-reqall-guardrail mark-context --evidence "searched Reqall + reviewed open records"
 ```
+
+Trusted plugin hooks capture the successful Reqall tool-call IDs
+automatically. Do not substitute a free-form `mark-context` claim.
 
 ## When To Minimize
 

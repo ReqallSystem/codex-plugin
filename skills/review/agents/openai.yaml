@@ -1,0 +1,14 @@
+interface:
+  display_name: "Reqall Review"
+  short_description: "Review and triage open project memory"
+  default_prompt: "Use Reqall review to inspect, update, and link the open records for this project."
+  brand_color: "#4F46E5"
+policy:
+  allow_implicit_invocation: true
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "reqall"
+      description: "Reqall project memory tools"
+      transport: "streamable_http"
+      url: "https://www.reqall.net/mcp"

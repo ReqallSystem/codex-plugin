@@ -19,6 +19,8 @@ non-trivial Codex work.
 - Session/turn/task-isolated, fresh, atomic, concurrency-safe guardrail state
   under `PLUGIN_DATA`, with a safe project fallback.
 - Native Codex MCP config and OAuth documentation, plus bearer-token fallback.
+- Codex-native plugin metadata only; legacy cross-host manifests and duplicate
+  MCP declarations have been removed.
 - `agents/openai.yaml` invocation policy and Reqall MCP dependency metadata for
   every skill.
 - Behavioral Node tests and package/plugin validation commands.

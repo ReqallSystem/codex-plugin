@@ -72,7 +72,7 @@ function maxAgeMs(env = process.env) {
 }
 
 export function stateRoot(cwd = process.cwd(), env = process.env) {
-  const pluginData = env.PLUGIN_DATA || env.CLAUDE_PLUGIN_DATA;
+  const pluginData = env.PLUGIN_DATA;
   if (typeof pluginData === 'string' && pluginData.trim()) {
     return resolve(pluginData, 'reqall-guardrail');
   }

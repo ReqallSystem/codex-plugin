@@ -1,9 +1,0 @@
-{
-  "mcpServers": {
-    "reqall": {
-      "type": "http",
-      "url": "https://www.reqall.net/mcp",
-      "bearer_token_env_var": "REQALL_API_KEY"
-    }
-  }
-}

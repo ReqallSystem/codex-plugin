@@ -255,7 +255,7 @@ test('freshness rejects complete but expired state', () => {
 
 test('state falls back to a safe repo-local directory when PLUGIN_DATA is absent', () => {
   const cwd = mkdtempSync(join(tmpdir(), 'reqall-fallback-project-'));
-  const env = { PLUGIN_DATA: undefined, CLAUDE_PLUGIN_DATA: undefined };
+  const env = { PLUGIN_DATA: undefined };
   const result = runNode(GUARDRAIL, [
     'begin', '--task', 'fallback state', '--session', 'fallback-session', '--turn', 'fallback-turn',
   ], { cwd, env });

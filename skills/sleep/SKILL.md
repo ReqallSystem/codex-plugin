@@ -1,72 +1,59 @@
 ---
 name: sleep
-description: Run SLEEP maintenance to consolidate, compact, split, and cross-link Reqall records.
+description: Compress project memory — consolidate, split, compact, skip, and crosslink Reqall records
 ---
 
-# SLEEP Knowledge Graph Maintenance
+# SLEEP — compress project memory
 
-Run the Synthesis, Linking, Extraction, Enrichment Pipeline for a project.
-This keeps long-lived memory useful by consolidating resolved records,
-compacting durable notes, splitting dense active records, and creating
-high-value cross-links.
+**Goal:** Preserve **knowledge** in a **minimal number of short, non-redundant records**.
+User invoked sleep → rewrite and delete are expected. Compression is the point.
+Knowledge = decisions, outcomes, constraints, IDs, contracts — not session prose.
 
-SLEEP is rate-limited to once per 24 hours per project.
+Ops (fixed names): `consolidate` · `split` · `compact` · `skip` · `crosslink`
+
+Rate-limited ~once per 24h per project. **Modest progress is success** — do not boil the ocean.
+
+## Decision table
+
+| Signal | Action |
+|--------|--------|
+| Server cluster of highly similar resolved/archived | **consolidate** → one terse record; **sources deleted** |
+| Isolated resolved/archived; durable but verbose/redundant | **compact** |
+| Isolated resolved/archived; pure noise (ack, empty, no durable fact) | **skip** |
+| Active/open; 2+ clearly separable topics | **split** (original deleted by apply) |
+| Active/open; single topic, already clear | leave (no op) |
+| Cross-project pair; same concept, discovery-useful | **crosslink** |
+| Cross-project pair; superficial token overlap | omit |
+| Candidate unclear / not obvious | **omit this pass** (not a full-run refuse) |
+
+Prefer clear, concise records and useful links over perfect coverage. A long but appropriate record can wait for a later sleep.
 
 ## Steps
 
-1. Identify the project from the user's argument, `REQALL_PROJECT_NAME`, git
-   `origin`, or the current directory basename. Call `reqall:upsert_project`
-   with the exact name and keep `project_id`.
+1. **Project** — user arg → `REQALL_PROJECT_NAME` → git `org/repo` → dir basename → `reqall:upsert_project` → `project_id`.
 
-2. Load the maintenance context.
-   Call `reqall:search` for recent maintenance, consolidation, and open-risk
-   records, then call `reqall:list_records` with `status: "open"`. This also
-   satisfies the lifecycle context gate before the stateful SLEEP audit.
+2. **Context gate** — `reqall:search` for recent maintenance / consolidation risk, then `reqall:list_records` with `status: "open"`.
 
-3. Fetch candidates.
-   Call `reqall:sleep_candidates` with `project_id`. If rate-limited, report
-   the next eligible time and stop.
+3. **Candidates** — `reqall:sleep_candidates` with `project_id`. If rate-limited, report next eligible time and stop.
 
-4. Report the candidate summary before applying changes:
-   - Consolidation clusters and total records in them
-   - Rollup candidates
-   - Split candidates
-   - Cross-link pairs
+4. **Summary** — counts: consolidate clusters, compact/skip pool, split, crosslink. Empty → "Nothing to do — graph is healthy."
 
-5. Process consolidation clusters.
-   Merge records only when the synthesized record can preserve all durable
-   details. Use the most specific title, `kind: "arch"`, and
-   `status: "resolved"` for synthesized durable knowledge.
+5. **Select ops** — decision table only. Prefer obvious wins; small batch is fine. Bodies: terse, non-redundant.
+   - **consolidate** — `kind: "arch"`, `status: "resolved"`; best title; keep knowledge from all members; wording is disposable.
+   - **compact** — same id; leaner form.
+   - **split** — focused sub-records; kind/status fit each topic (usually match original).
+   - **crosslink** — only when useful for discovery.
 
-6. Process rollup candidates.
-   Compact records with lasting value. Skip trivial or ephemeral records.
+6. **Apply** — one `reqall:sleep_apply` with the batch. No per-op confirmation.
 
-7. Process split candidates.
-   Split active records only when they contain two or more separable topics.
-   Keep focused records intact even when they are long.
+7. **Persist outcome** — `reqall:upsert_record` with `kind: "todo"`, `status: "resolved"`, title `TASK: SLEEP maintenance`, body = applied counts + errors. Then `reqall:list_records` to verify. SLEEP ops alone do not satisfy session persistence.
 
-8. Process cross-link candidates.
-   Confirm links when the relationship is useful for future discovery.
-   Reject superficial similarity.
+8. **Report** — consolidated / compacted / split / crosslinked / skipped / errors. If candidates were capped: note to run again later.
 
-9. Apply operations.
-   Call `reqall:sleep_apply` with the full batch of confirmed operations.
+## Rules
 
-10. Persist the maintenance outcome.
-   Call `reqall:upsert_record` with `kind: "todo"`, `status: "resolved"`, a
-   `TASK: SLEEP maintenance` title, and a concise body containing the applied
-   operation counts and unresolved errors. Then call `reqall:list_records` to
-   verify the work-item record. SLEEP operations and links alone do not satisfy
-   final session persistence.
-
-11. Report results:
-   - Clusters consolidated
-   - Records compacted
-   - Records split
-   - Cross-links created
-   - Errors or capped candidates
-
-## Safety
-
-Run autonomously after candidates are fetched. The server enforces ownership
-and active-record safety invariants.
+- Knowledge ≠ wording. Prose is disposable; durable facts are not.
+- **consolidate always deletes sources** (server). Do not keep originals.
+- Do not ask whether rewrite/delete is OK — user ran sleep.
+- Unclear candidate → omit; do not invent merges or splits.
+- Safety (ownership, active dependents) is enforced by `sleep_apply` — do not re-check.

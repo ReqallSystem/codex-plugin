@@ -31,7 +31,7 @@ trust them, and start a new session.
 
 - `.codex-plugin/plugin.json` - Codex plugin manifest
 - `.app.json` - registered Reqall connector for interactive login
-- `.mcp.json` - direct MCP bearer-token fallback
+- `.mcp.json` - Codex plugin MCP server declaration
 - `hooks/hooks.json` and `scripts/reqall-hook.mjs` - lifecycle automation
 - `skills/` - context, documentation, persistence, triage, review, and SLEEP
   workflows with `agents/openai.yaml` metadata
@@ -66,12 +66,22 @@ Connect the bundled Reqall app when Codex prompts for authentication. After
 installation, review the hooks with `/hooks` and start a new session so Codex
 loads the plugin's skills, MCP tools, and trusted hook definition.
 
+Use Codex's plugin commands to inspect or refresh the installation:
+
+```bash
+codex plugin list
+codex plugin add reqall@reqall-plugins
+```
+
 ## Authentication
 
 The preferred plugin path is the registered connector in `.app.json`, where
 Codex owns interactive login and reauthentication.
 
-For a standalone MCP configuration, use native OAuth:
+The plugin supplies both a registered app connector and its MCP server
+declaration, so a separate `codex mcp add` is not needed for a normal plugin
+installation. For a standalone Codex CLI configuration without the plugin,
+use native OAuth:
 
 ```bash
 codex mcp add reqall --url https://www.reqall.net/mcp

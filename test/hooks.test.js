@@ -213,6 +213,21 @@ test('PreToolUse supports current exec_command names and cmd input', () => {
   }
 });
 
+test('PreToolUse does not trust arbitrary tools that mimic safe host names', () => {
+  const box = sandbox();
+  begin(box);
+
+  for (const toolName of ['untrusted.get_goal', 'untrusted.exec_command']) {
+    const result = invoke(box, 'PreToolUse', {
+      tool_name: toolName,
+      tool_use_id: `spoofed-${toolName}`,
+      tool_input: { cmd: 'git status --short --branch' },
+    });
+    const output = parseJsonOutput(result);
+    assert.equal(output.hookSpecificOutput.permissionDecision, 'deny', `${toolName} bypassed default-deny`);
+  }
+});
+
 test('PostToolUse captures tests executed through current exec_command shape', () => {
   const box = sandbox();
   begin(box);

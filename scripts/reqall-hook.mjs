@@ -189,10 +189,20 @@ function shellCommand(input) {
   return typeof toolInput.cmd === 'string' ? toolInput.cmd : toolInput.command;
 }
 
+function isShellToolName(toolName) {
+  return new Set([
+    'bash',
+    'shell_command',
+    'exec_command',
+    'functions.exec_command',
+    'functions:exec_command',
+    'functions/exec_command',
+  ]).has(String(toolName || '').toLowerCase());
+}
+
 function isMutatingTool(input) {
   const toolName = String(input.tool_name || '');
   const normalizedToolName = toolName.toLowerCase();
-  const baseToolName = normalizedToolName.split(/[.:/]/).at(-1);
   const operation = reqallOperation(toolName);
   if (operation) {
     return PERSIST_WRITE_OPERATIONS.includes(operation)
@@ -218,9 +228,9 @@ function isMutatingTool(input) {
     // Code-mode source is inert; Codex hooks every nested tool call separately.
     'functions.exec',
   ]);
-  if (safeHostTools.has(normalizedToolName) || safeHostTools.has(baseToolName)) return false;
-  if (/^(apply_patch|edit|write)$/i.test(baseToolName)) return true;
-  if (/^(bash|shell_command|exec_command)$/i.test(baseToolName)) {
+  if (safeHostTools.has(normalizedToolName)) return false;
+  if (/^(apply_patch|edit|write)$/i.test(normalizedToolName)) return true;
+  if (isShellToolName(normalizedToolName)) {
     return isMutatingShell(shellCommand(input));
   }
   return true;
@@ -324,8 +334,7 @@ function postToolUse(input) {
   }
 
   const mutation = isMutatingTool(input);
-  const baseToolName = String(input.tool_name || '').toLowerCase().split(/[.:/]/).at(-1);
-  const test = /^(bash|shell_command|exec_command)$/i.test(baseToolName)
+  const test = isShellToolName(input.tool_name)
     && looksLikeTestCommand(shellCommand(input));
   if (mutation || test) {
     if (mutation && !state.nonTrivial) setNonTrivial(options(input, true));

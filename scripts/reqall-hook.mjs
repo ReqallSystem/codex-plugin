@@ -181,9 +181,18 @@ function isMutatingShell(command) {
   return !isSafeReadOnlyShell(command);
 }
 
+function shellCommand(input) {
+  const toolInput = input?.tool_input;
+  if (!toolInput || typeof toolInput !== 'object') return undefined;
+  // Codex's unified exec tool uses `cmd`; older Bash/shell hooks use
+  // `command`. Supporting both keeps classification consistent across hosts.
+  return typeof toolInput.cmd === 'string' ? toolInput.cmd : toolInput.command;
+}
+
 function isMutatingTool(input) {
   const toolName = String(input.tool_name || '');
   const normalizedToolName = toolName.toLowerCase();
+  const baseToolName = normalizedToolName.split(/[.:/]/).at(-1);
   const operation = reqallOperation(toolName);
   if (operation) {
     return PERSIST_WRITE_OPERATIONS.includes(operation)
@@ -209,10 +218,10 @@ function isMutatingTool(input) {
     // Code-mode source is inert; Codex hooks every nested tool call separately.
     'functions.exec',
   ]);
-  if (safeHostTools.has(normalizedToolName)) return false;
-  if (/^(apply_patch|Edit|Write)$/i.test(toolName)) return true;
-  if (/^(Bash|shell_command|exec_command)$/i.test(toolName)) {
-    return isMutatingShell(input.tool_input?.command);
+  if (safeHostTools.has(normalizedToolName) || safeHostTools.has(baseToolName)) return false;
+  if (/^(apply_patch|edit|write)$/i.test(baseToolName)) return true;
+  if (/^(bash|shell_command|exec_command)$/i.test(baseToolName)) {
+    return isMutatingShell(shellCommand(input));
   }
   return true;
 }
@@ -315,8 +324,9 @@ function postToolUse(input) {
   }
 
   const mutation = isMutatingTool(input);
-  const test = /^(Bash|shell_command|exec_command)$/i.test(String(input.tool_name || ''))
-    && looksLikeTestCommand(input.tool_input?.command);
+  const baseToolName = String(input.tool_name || '').toLowerCase().split(/[.:/]/).at(-1);
+  const test = /^(bash|shell_command|exec_command)$/i.test(baseToolName)
+    && looksLikeTestCommand(shellCommand(input));
   if (mutation || test) {
     if (mutation && !state.nonTrivial) setNonTrivial(options(input, true));
     recordToolEvidence(options(input, true), {

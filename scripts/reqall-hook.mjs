@@ -181,6 +181,25 @@ function isMutatingShell(command) {
   return !isSafeReadOnlyShell(command);
 }
 
+function shellCommand(input) {
+  const toolInput = input?.tool_input;
+  if (!toolInput || typeof toolInput !== 'object') return undefined;
+  // Codex's unified exec tool uses `cmd`; older Bash/shell hooks use
+  // `command`. Supporting both keeps classification consistent across hosts.
+  return typeof toolInput.cmd === 'string' ? toolInput.cmd : toolInput.command;
+}
+
+function isShellToolName(toolName) {
+  return new Set([
+    'bash',
+    'shell_command',
+    'exec_command',
+    'functions.exec_command',
+    'functions:exec_command',
+    'functions/exec_command',
+  ]).has(String(toolName || '').toLowerCase());
+}
+
 function isMutatingTool(input) {
   const toolName = String(input.tool_name || '');
   const normalizedToolName = toolName.toLowerCase();
@@ -208,11 +227,12 @@ function isMutatingTool(input) {
     'collaboration.wait_agent',
     // Code-mode source is inert; Codex hooks every nested tool call separately.
     'functions.exec',
+    'functions.wait',
   ]);
   if (safeHostTools.has(normalizedToolName)) return false;
-  if (/^(apply_patch|Edit|Write)$/i.test(toolName)) return true;
-  if (/^(Bash|shell_command|exec_command)$/i.test(toolName)) {
-    return isMutatingShell(input.tool_input?.command);
+  if (/^(apply_patch|edit|write)$/i.test(normalizedToolName)) return true;
+  if (isShellToolName(normalizedToolName)) {
+    return isMutatingShell(shellCommand(input));
   }
   return true;
 }
@@ -315,8 +335,8 @@ function postToolUse(input) {
   }
 
   const mutation = isMutatingTool(input);
-  const test = /^(Bash|shell_command|exec_command)$/i.test(String(input.tool_name || ''))
-    && looksLikeTestCommand(input.tool_input?.command);
+  const test = isShellToolName(input.tool_name)
+    && looksLikeTestCommand(shellCommand(input));
   if (mutation || test) {
     if (mutation && !state.nonTrivial) setNonTrivial(options(input, true));
     recordToolEvidence(options(input, true), {

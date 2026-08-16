@@ -24,6 +24,8 @@ non-trivial Codex work.
 - `agents/openai.yaml` invocation policy and Reqall MCP dependency metadata for
   every skill.
 - Behavioral Node tests and package/plugin validation commands.
+- Current unified `exec_command` support, including namespaced tool names and
+  the `cmd` input used for mutation gating and test-evidence capture.
 
 ## P1: Server Contract And Recall Quality
 

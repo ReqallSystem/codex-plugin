@@ -191,6 +191,68 @@ test('PreToolUse preserves only a narrow set of non-executing inspection command
   }
 });
 
+test('PreToolUse supports current exec_command names and cmd input', () => {
+  const box = sandbox();
+  begin(box);
+
+  for (const toolName of ['exec_command', 'functions.exec_command']) {
+    let result = invoke(box, 'PreToolUse', {
+      tool_name: toolName,
+      tool_use_id: `safe-${toolName}`,
+      tool_input: { cmd: 'git status --short --branch' },
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout.trim(), '', `${toolName} did not accept a safe cmd read`);
+
+    result = invoke(box, 'PreToolUse', {
+      tool_name: toolName,
+      tool_use_id: `write-${toolName}`,
+      tool_input: { cmd: 'npm run generate' },
+    });
+    assert.equal(parseJsonOutput(result).hookSpecificOutput.permissionDecision, 'deny');
+  }
+});
+
+test('PreToolUse does not trust arbitrary tools that mimic safe host names', () => {
+  const box = sandbox();
+  begin(box);
+
+  for (const toolName of ['untrusted.get_goal', 'untrusted.exec_command']) {
+    const result = invoke(box, 'PreToolUse', {
+      tool_name: toolName,
+      tool_use_id: `spoofed-${toolName}`,
+      tool_input: { cmd: 'git status --short --branch' },
+    });
+    const output = parseJsonOutput(result);
+    assert.equal(output.hookSpecificOutput.permissionDecision, 'deny', `${toolName} bypassed default-deny`);
+  }
+});
+
+test('PostToolUse captures tests executed through current exec_command shape', () => {
+  const box = sandbox();
+  begin(box);
+  for (const [operation, id] of [
+    ['upsert_project', 'exec-project'],
+    ['search', 'exec-search'],
+    ['list_records', 'exec-list'],
+  ]) {
+    assert.equal(record(box, operation, id).status, 0);
+  }
+
+  const result = invoke(box, 'PostToolUse', {
+    tool_name: 'functions.exec_command',
+    tool_use_id: 'exec-test',
+    tool_input: { cmd: 'npm test' },
+    tool_response: { exit_code: 0, output: 'ok' },
+  });
+  assert.equal(result.status, 0, result.stderr);
+
+  const status = runNode(GUARDRAIL, ['status', '--session', 'session-1', '--turn', 'turn-1'], box);
+  const state = parseJsonOutput(status);
+  assert.ok(state.evidence.some((entry) =>
+    entry.toolUseId === 'exec-test' && entry.phase === 'test' && entry.success === true));
+});
+
 test('PreToolUse defaults unknown local and MCP tools to mutating', () => {
   const box = sandbox();
   begin(box);
@@ -228,6 +290,7 @@ test('PreToolUse defaults unknown local and MCP tools to mutating', () => {
     'list_mcp_resource_templates',
     'read_mcp_resource',
     'functions.exec',
+    'functions.wait',
   ]) {
     const result = invoke(box, 'PreToolUse', {
       tool_name: toolName,

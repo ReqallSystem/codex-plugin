@@ -133,7 +133,9 @@ read operations remain available so the agent can satisfy the contract.
 Codex emits nested calls made through `functions.exec` as individual tool
 events. The wrapper itself is therefore allowlisted, while each nested tool is
 classified independently; the hook does not attempt to parse JavaScript
-wrapper source. Shell classification accepts both the legacy `command` input
+wrapper source. Its completion-only `functions.wait` companion is also safe;
+tools that can write to a running process remain gated. Shell classification
+accepts both the legacy `command` input
 used by Bash-style tools and the current unified `exec_command` `cmd` input,
 including the known `functions.exec_command` namespace. Unknown namespaces
 remain default-deny even when their final segment resembles a safe host tool.

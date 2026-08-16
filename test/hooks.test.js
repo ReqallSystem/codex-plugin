@@ -290,6 +290,7 @@ test('PreToolUse defaults unknown local and MCP tools to mutating', () => {
     'list_mcp_resource_templates',
     'read_mcp_resource',
     'functions.exec',
+    'functions.wait',
   ]) {
     const result = invoke(box, 'PreToolUse', {
       tool_name: toolName,

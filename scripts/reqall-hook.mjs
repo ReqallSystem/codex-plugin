@@ -227,6 +227,7 @@ function isMutatingTool(input) {
     'collaboration.wait_agent',
     // Code-mode source is inert; Codex hooks every nested tool call separately.
     'functions.exec',
+    'functions.wait',
   ]);
   if (safeHostTools.has(normalizedToolName)) return false;
   if (/^(apply_patch|edit|write)$/i.test(normalizedToolName)) return true;

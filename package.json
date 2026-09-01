@@ -1,6 +1,6 @@
 {
   "name": "@reqall/codex-plugin",
-  "version": "2026.8.0",
+  "version": "2026.9.0",
   "description": "Reqall memory autopilot for Codex with lifecycle hooks, MCP context, persistence, triage, review, and SLEEP workflows",
   "type": "module",
   "homepage": "https://github.com/ReqallSystem/codex-plugin",

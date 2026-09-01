@@ -33,8 +33,11 @@ Reqall. Create one record per distinct work item.
 
 1. Identify the project.
    Use `REQALL_PROJECT_NAME`, then git `origin` as `org/repo`, then the
-   current directory basename. Call `reqall:upsert_project` with that exact
-   name and keep the returned `project_id`.
+   machine project `.machine/<hostname>/<os-user>` (never the directory
+   basename). Call `reqall:upsert_project` with that exact name and keep the
+   returned `project_id`. Routing: account-wide preferences/conventions ->
+   the `.user` project; machine-specific config/fixes -> the machine project;
+   repo-anchored work stays in the repo project.
 2. Enumerate work items.
    Review files created or modified, bugs fixed or discovered, design
    decisions, specs changed, tests or builds run, and follow-up tasks.

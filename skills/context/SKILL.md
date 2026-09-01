@@ -12,7 +12,8 @@ Load project context from Reqall before starting non-trivial work.
 1. Resolve the project name in this order:
    - `REQALL_PROJECT_NAME`
    - git remote repo name as `org/repo`
-   - current directory basename
+   - the machine project `.machine/<hostname>/<os-user>` (never the
+     directory basename; `REQALL_MACHINE_NAME` overrides the hostname segment)
 2. Call `reqall:upsert_project` with the exact project name and save
    `project_id`.
 3. Call `reqall:search` with a natural-language query based on the user's

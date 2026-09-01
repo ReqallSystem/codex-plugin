@@ -67,7 +67,7 @@ function contextContract(state) {
     : evaluation.ok ? 'complete' : evaluation.reason;
   const contract = [
     'Reqall memory autopilot is active for this plugin.',
-    `Project: ${state?.project || 'resolve from REQALL_PROJECT_NAME, git origin, or cwd'}.`,
+    `Project: ${state?.project || 'resolve from REQALL_PROJECT_NAME, git origin, or the machine project .machine/<hostname>/<os-user>'}.`,
     `Context status: ${status}.`,
     'Before any mutation on non-trivial work, call Reqall upsert_project, search, and list_records (status open).',
     'Use get_record, list_links, and impact when tracked behavior or relevant hits need detail.',

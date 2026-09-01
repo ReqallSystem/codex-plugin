@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -529,4 +529,19 @@ test('delayed PostToolUse evidence cannot cross turn boundaries', () => {
     tool_input: { command: '*** Begin Patch' },
   });
   assert.equal(parseJsonOutput(result).hookSpecificOutput.permissionDecision, 'deny');
+});
+
+test('non-repo cwd resolves to the machine project', async () => {
+  const { resolveProjectName } = await import('../scripts/lib/project.mjs');
+  const dir = mkdtempSync(join(tmpdir(), 'reqall-nogit-'));
+  try {
+    assert.match(resolveProjectName(dir, {}), /^\.machine\/[^/]+\/[^/]+$/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('REQALL_MACHINE_NAME overrides the hostname segment', async () => {
+  const { machineProjectName } = await import('../scripts/lib/project.mjs');
+  assert.match(machineProjectName({ REQALL_MACHINE_NAME: 'CI-Box' }), /^\.machine\/ci-box\/[^/]+$/);
 });

@@ -104,6 +104,12 @@ url = "https://www.reqall.net/mcp"
 bearer_token_env_var = "REQALL_API_KEY"
 ```
 
+
+Environment options read by the hooks: `REQALL_PROJECT_NAME` overrides project
+detection (else git `origin` as `org/repo`, else the machine project
+`.machine/<hostname>/<os-user>`); `REQALL_MACHINE_NAME` overrides the hostname
+segment of the machine project — set it in CI/containers with ephemeral
+hostnames.
 For self-hosted Reqall, substitute the deployment's HTTPS MCP endpoint.
 
 ## Lifecycle Contract

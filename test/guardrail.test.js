@@ -263,13 +263,14 @@ test('state falls back to a safe repo-local directory when PLUGIN_DATA is absent
   assert.ok(readdirSync(join(cwd, '.reqall', 'codex-guardrail'), { recursive: true }).length > 0);
 });
 
-test('project helper honors override and falls back to cwd basename', () => {
+test('project helper honors override and falls back to the machine project', () => {
   const cwd = mkdtempSync(join(tmpdir(), 'reqall-project-name-'));
   let result = runNode(HELPER, ['project'], { cwd, env: { REQALL_PROJECT_NAME: 'Example/Explicit' } });
   assert.equal(result.status, 0);
   assert.equal(result.stdout.trim(), 'Example/Explicit');
 
+  // Non-repo cwd: machine project, never the directory basename.
   result = runNode(HELPER, ['project'], { cwd, env: { REQALL_PROJECT_NAME: undefined } });
   assert.equal(result.status, 0);
-  assert.equal(result.stdout.trim(), basename(cwd));
+  assert.match(result.stdout.trim(), /^\.machine\/[^/]+\/[^/]+$/);
 });

@@ -30,7 +30,7 @@ Prefer clear, concise records and useful links over perfect coverage. A long but
 
 ## Steps
 
-1. **Project** — user arg → `REQALL_PROJECT_NAME` → git `org/repo` → dir basename → `reqall:upsert_project` → `project_id`.
+1. **Project** — user arg → `REQALL_PROJECT_NAME` → git `org/repo` → `.machine/<hostname>/<os-user>` → `reqall:upsert_project` → `project_id`.
 
 2. **Context gate** — `reqall:search` for recent maintenance / consolidation risk, then `reqall:list_records` with `status: "open"`.
 

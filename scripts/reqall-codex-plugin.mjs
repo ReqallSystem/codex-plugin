@@ -62,6 +62,7 @@ function contextCommand(args) {
     'Call `reqall:list_records` with `status: "open"`.',
     'Call `reqall:get_record` for the top relevant records when details matter.',
     'If changing tracked behavior, call `reqall:list_links` and `reqall:impact`.',
+    'For agreed new behavior or architecture, use `reqall:intend` before editing.',
     'Trusted Reqall hooks capture successful tool-call IDs automatically.',
   ]);
 }
@@ -113,10 +114,12 @@ function persistCommand(args) {
     `Task summary: \`${task || 'current task'}\``,
     'Enumerate all completed work items from this turn.',
     'Upsert resolved issue/todo/arch records for completed work.',
+    'Use work/info kinds and inline links only if the current tool schema supports them.',
+    'Reconcile intent: implements for outcomes, tests for verification, blocks for remaining gaps.',
     'Persist verification as `kind=test`.',
     `Persist follow-ups${args['follow-up'] ? `: ${args['follow-up']}` : ' if any remain unresolved'}.`,
     `Persist test/build evidence${args.tests ? `: ${args.tests}` : ''}.`,
-    'List records again to sanity-check what remains open.',
+    'Write outcomes after the latest mutation/test, then list records after the latest record write.',
     'Let trusted hooks capture the persistence write and verification tool-call IDs.',
   ]);
 }

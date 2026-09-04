@@ -1,0 +1,13 @@
+interface:
+  display_name: "Reqall Intent"
+  short_description: "Record agreed behavior before implementation"
+  default_prompt: "Use $intend to record the agreed behavior and acceptance criteria in Reqall."
+policy:
+  allow_implicit_invocation: true
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "reqall"
+      description: "Reqall project memory tools"
+      transport: "streamable_http"
+      url: "https://www.reqall.net/mcp"

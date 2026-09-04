@@ -545,3 +545,64 @@ test('REQALL_MACHINE_NAME overrides the hostname segment', async () => {
   const { machineProjectName } = await import('../scripts/lib/project.mjs');
   assert.match(machineProjectName({ REQALL_MACHINE_NAME: 'CI-Box' }), /^\.machine\/ci-box\/[^/]+$/);
 });
+
+test('intent IDs survive compaction and resume without leaking record bodies', () => {
+  const box = sandbox();
+  begin(box);
+  for (const operation of ['upsert_project', 'search', 'list_records']) record(box, operation, operation);
+  for (const [operation, id] of [['upsert_record', 42], ['get_record', 43]]) {
+    const result = invoke(box, 'PostToolUse', {
+      tool_name: `mcp__codex_apps__reqall_${operation}`,
+      tool_use_id: `intent-${id}`,
+      tool_input: operation === 'upsert_record' ? { kind: 'spec', status: 'open' } : { id },
+      tool_response: { structuredContent: { ok: true, data: {
+        record: { id, kind: 'spec', status: 'open', body: 'private-intent-body', title: 'private-title' },
+      } } },
+    });
+    assert.equal(result.status, 0, result.stderr);
+  }
+  record(box, 'list_records', 'intent-verify');
+  let output = parseJsonOutput(invoke(box, 'Stop', { stop_hook_active: false }));
+  assert.equal(output.decision, 'block');
+  assert.match(output.reason, /#42, #43/);
+  for (const source of ['compact', 'resume']) {
+    // SessionStart has no turn_id in the host schema; use the session pointer.
+    output = parseJsonOutput(invoke(box, 'SessionStart', { source, turn_id: undefined }));
+    assert.match(output.hookSpecificOutput.additionalContext, /#42, #43/);
+    assert.match(output.hookSpecificOutput.additionalContext, /Context status: complete/);
+  }
+  const status = runNode(GUARDRAIL, ['status', '--session', 'session-1'], box);
+  assert.doesNotMatch(status.stdout, /private-intent-body|private-title/);
+  assert.deepEqual(parseJsonOutput(status).intents, [{ id: 42, kind: 'spec' }, { id: 43, kind: 'spec' }]);
+  record(box, 'upsert_record', 'outcome', { structuredContent: { ok: true, data: {
+    record: { id: 44, kind: 'todo', status: 'resolved' },
+  } } });
+  record(box, 'list_records', 'outcome-verify');
+  assert.equal(parseJsonOutput(invoke(box, 'Stop', { stop_hook_active: true })).continue, true);
+});
+
+test('unrelated MCP context calls do not unlock mutation', () => {
+  const box = sandbox();
+  begin(box);
+  for (const operation of ['upsert_project', 'search', 'list_records']) {
+    invoke(box, 'PostToolUse', {
+      tool_name: `mcp__other__${operation}`, tool_use_id: `other-${operation}`,
+      tool_input: {}, tool_response: { ok: true },
+    });
+  }
+  const output = parseJsonOutput(invoke(box, 'PreToolUse', {
+    tool_name: 'apply_patch', tool_use_id: 'edit', tool_input: {},
+  }));
+  assert.equal(output.hookSpecificOutput.permissionDecision, 'deny');
+});
+
+test('new tasks do not inherit intent IDs from a prior turn', () => {
+  const box = sandbox();
+  begin(box);
+  record(box, 'get_record', 'old-intent', { structuredContent: { ok: true, data: {
+    record: { id: 42, kind: 'arch' },
+  } } });
+  invoke(box, 'UserPromptSubmit', { turn_id: 'turn-2', prompt: 'Implement the next task' });
+  const output = parseJsonOutput(invoke(box, 'SessionStart', { source: 'compact', turn_id: undefined }));
+  assert.doesNotMatch(output.hookSpecificOutput.additionalContext, /#42/);
+});

@@ -1,6 +1,6 @@
 {
   "name": "@reqall/codex-plugin",
-  "version": "2026.9.0",
+  "version": "2026.9.1",
   "description": "Reqall memory autopilot for Codex with lifecycle hooks, MCP context, persistence, triage, review, and SLEEP workflows",
   "type": "module",
   "homepage": "https://github.com/ReqallSystem/codex-plugin",
@@ -19,7 +19,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "test": "node --test test/guardrail.test.js test/hooks.test.js"
+    "test": "node --test test/guardrail.test.js test/hooks.test.js test/state.test.js test/package.test.js"
   },
   "bin": {
     "reqall-guardrail": "scripts/reqall-guardrail.mjs",
@@ -33,6 +33,7 @@
     "AGENTS.md",
     "config.toml.example",
     "GUARDRAIL.md",
+    "EVALUATION.md",
     "ROADMAP.md",
     "hooks",
     "skills",

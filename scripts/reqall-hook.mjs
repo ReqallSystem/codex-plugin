@@ -12,7 +12,9 @@ import {
   markGuardrailDegraded,
   markStopContinuation,
   recordToolEvidence,
+  recordIntent,
   reqallOperation,
+  responseRecord,
   setNonTrivial,
   valueDigest,
 } from './lib/guardrail-state.mjs';
@@ -57,23 +59,30 @@ function isNonTrivialPrompt(prompt) {
   if (typeof prompt !== 'string') return false;
   const value = prompt.trim();
   if (!value || /^(hi|hello|hey|thanks|thank you|ok|okay)[!.?\s]*$/i.test(value)) return false;
-  return /\b(implement|update|change|edit|fix|debug|bug|refactor|migrat|architect|design|create|add|remove|test|build|review|audit|inspect|assess|examine|research|analy[sz]e|investigate|diagnose|release|deploy|document)\w*\b/i.test(value);
+  return /\b(implement|update|change|edit|fix|debug|bug|refactor|migrat|architect|design|create|add|remove|test|build|review|audit|evaluate|inspect|assess|examine|research|analy[sz]e|investigate|diagnose|release|deploy|merge|document)\w*\b/i.test(value);
+}
+
+function intentContext(state) {
+  const ids = (state?.intents || []).map((record) => `#${record.id}`).join(', ');
+  return ids ? `Intent records read or written this task: ${ids}. Use get_record for criteria; link outcomes with implements and unresolved gaps with blocks.` : '';
 }
 
 function contextContract(state) {
   const evaluation = evaluateGuardrail(state);
   const status = evaluation.degraded
     ? `degraded (${evaluation.reason})`
-    : evaluation.ok ? 'complete' : evaluation.reason;
+    : evaluation.ok || evaluation.code === 12 ? 'complete' : evaluation.reason;
   const contract = [
     'Reqall memory autopilot is active for this plugin.',
     `Project: ${state?.project || 'resolve from REQALL_PROJECT_NAME, git origin, or the machine project .machine/<hostname>/<os-user>'}.`,
     `Context status: ${status}.`,
     'Before any mutation on non-trivial work, call Reqall upsert_project, search, and list_records (status open).',
     'Use get_record, list_links, and impact when tracked behavior or relevant hits need detail.',
+    'For agreed new behavior or architecture, use reqall:intend after context and before edits; skip routine fixes and chores.',
     'Successful Reqall tool-call IDs are captured automatically; free-form claims do not satisfy the guardrail.',
     'Before the root turn ends, persist each meaningful outcome with upsert_record; links and SLEEP changes are supplemental. Verify with list_records.',
     'Subagents may add notes, but the root agent owns final persistence.',
+    intentContext(state),
   ];
   if (evaluation.degraded) {
     contract.push('Reqall is unavailable in bounded degraded mode; continue the user task and disclose that context and persistence did not run.');
@@ -82,6 +91,13 @@ function contextContract(state) {
 }
 
 function sessionStart(input) {
+  if (['compact', 'resume'].includes(input.source)) {
+    const state = loadGuardrail(options(input, true));
+    return hookContext('SessionStart', [
+      contextContract(state),
+      'Continue the original task from its saved state. Compaction or resume does not complete persistence.',
+    ].join(' '));
+  }
   return hookContext('SessionStart', [
     'Reqall memory autopilot is installed.',
     'For non-trivial work, retrieve project context before mutation and persist outcomes before the root turn ends.',
@@ -307,8 +323,14 @@ function postToolUse(input) {
   const operation = reqallOperation(input.tool_name);
   const success = isSuccessfulToolResponse(input.tool_response);
   if (operation) {
+    const record = ['upsert_record', 'get_record'].includes(operation)
+      ? responseRecord(input.tool_response) : null;
+    const kind = record?.kind ?? input.tool_input?.kind;
+    const status = record?.status ?? input.tool_input?.status ?? 'open';
+    const intentWrite = operation === 'upsert_record'
+      && ['spec', 'arch'].includes(kind) && ['open', 'active'].includes(status);
     recordToolEvidence(options(input, true), {
-      phase: phaseForOperation(operation),
+      phase: intentWrite ? 'intent' : phaseForOperation(operation),
       operation,
       toolName: input.tool_name,
       toolUseId: input.tool_use_id,
@@ -317,6 +339,7 @@ function postToolUse(input) {
       inputDigest: valueDigest(input.tool_input),
       resultDigest: valueDigest(input.tool_response),
     });
+    if (success && record) recordIntent(options(input, true), record);
     if (!success && CONTEXT_OPERATIONS.includes(operation)) {
       const outage = classifyReqallOutage(input.tool_response);
       if (outage) {
@@ -421,7 +444,7 @@ function stop(input) {
       : 'The root must persist each meaningful outcome with upsert_record, add links when useful, then verify with list_records before finishing.';
   return {
     decision: 'block',
-    reason: `${CONTINUATION_MARKER} ${action} Current guardrail status: ${evaluation.reason}.`,
+    reason: `${CONTINUATION_MARKER} ${action} ${intentContext(state)} Current guardrail status: ${evaluation.reason}.`,
   };
 }
 

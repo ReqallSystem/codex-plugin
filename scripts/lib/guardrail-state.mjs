@@ -316,6 +316,19 @@ export function appendGuardrailNote(options, note) {
   });
 }
 
+export function recordIntent(options, record) {
+  if (!Number.isSafeInteger(record?.id) || record.id <= 0
+    || !['spec', 'arch'].includes(record.kind)) return null;
+  return mutateGuardrail(options, (state) => {
+    const intents = state.intents || [];
+    state.intents = [...intents.filter((item) => item.id !== record.id), {
+      id: record.id,
+      kind: record.kind,
+    }].slice(-20);
+    return state;
+  });
+}
+
 export function markStopContinuation(options) {
   let newlyIssued = false;
   const state = mutateGuardrail({ ...options, allowCurrent: options.allowCurrent !== false }, (current) => {
@@ -353,14 +366,18 @@ export function markGuardrailDegraded(options, details) {
 export function reqallOperation(toolName) {
   if (typeof toolName !== 'string') return '';
   const normalized = toolName.toLowerCase().replace(/-/g, '_');
-  const mentionsReqall = normalized.includes('reqall');
+  // A matching operation suffix from another MCP server is not Reqall proof.
+  // Keep bare operation names for legacy/manual callers.
+  if (REQALL_OPERATIONS.includes(normalized)) return normalized;
+  const reqallNamespace = /(?:^|[._:/])reqall(?:[._:/]|$)/.test(normalized);
+  if (!reqallNamespace) return '';
   for (const operation of REQALL_OPERATIONS) {
     if (
       normalized === operation
       || normalized.endsWith(`__${operation}`)
       || normalized.endsWith(`:${operation}`)
       || normalized.endsWith(`/${operation}`)
-      || (mentionsReqall && normalized.endsWith(`_${operation}`))
+      || normalized.endsWith(`_${operation}`)
     ) {
       return operation;
     }
@@ -371,6 +388,10 @@ export function reqallOperation(toolName) {
 export function isSuccessfulToolResponse(response) {
   if (response === null || response === undefined) return false;
   if (typeof response === 'string') {
+    try {
+      const parsed = JSON.parse(response);
+      if (parsed !== response) return isSuccessfulToolResponse(parsed);
+    } catch { /* Legacy plain-text tool output. */ }
     return !(
       /^\s*(?:tool call\s+)?(error|failed|failure|unauthorized)\b/i.test(response)
       || /\b(?:exit(?:ed)?(?: with)? code|exit_code)\s*[:=]?\s*[1-9]\d*\b/i.test(response)
@@ -378,9 +399,37 @@ export function isSuccessfulToolResponse(response) {
   }
   if (typeof response !== 'object') return true;
   if (response.isError === true || response.error || response.ok === false || response.success === false) return false;
+  if (response.structuredContent && !isSuccessfulToolResponse(response.structuredContent)) return false;
+  for (const block of Array.isArray(response.content) ? response.content : []) {
+    if (block.type !== 'text') continue;
+    try {
+      const parsed = JSON.parse(block.text);
+      if (parsed && typeof parsed === 'object' && !isSuccessfulToolResponse(parsed)) return false;
+    } catch { /* Natural-language content is not a result envelope. */ }
+  }
   const exitCode = response.exit_code ?? response.exitCode ?? response.code;
   if (typeof exitCode === 'number' && exitCode !== 0) return false;
+  if (response.session_id !== undefined && exitCode == null) return false;
   return true;
+}
+
+export function responseRecord(response) {
+  if (!isSuccessfulToolResponse(response)) return null;
+  if (typeof response === 'string') {
+    try { return responseRecord(JSON.parse(response)); } catch { return null; }
+  }
+  if (!response || typeof response !== 'object') return null;
+  const record = response.structuredContent?.data?.record ?? response.data?.record ?? response.record;
+  if (record && Number.isSafeInteger(record.id)) return record;
+  for (const block of Array.isArray(response.content) ? response.content : []) {
+    if (block.type === 'text') {
+      try {
+        const result = responseRecord(JSON.parse(block.text));
+        if (result) return result;
+      } catch { /* No structured record in this block. */ }
+    }
+  }
+  return null;
 }
 
 export function valueDigest(value) {
@@ -429,17 +478,22 @@ export function evaluateGuardrail(state, env = process.env) {
     };
   }
 
-  const firstWriteIndex = successful.findIndex((entry) => entry.operation === REQUIRED_PERSIST_OPERATION);
-  if (firstWriteIndex === -1) {
+  const trusted = state.evidence.filter((entry) => entry.source === QUALIFYING_EVIDENCE_SOURCE);
+  const lastWorkIndex = trusted.findLastIndex((entry) => ['mutation', 'test'].includes(entry.operation));
+  const lastWriteIndex = trusted.findLastIndex((entry) => entry.success
+    && entry.operation === REQUIRED_PERSIST_OPERATION && entry.phase !== 'intent');
+  if (lastWriteIndex === -1 || lastWriteIndex <= lastWorkIndex) {
     return {
       ok: false,
       code: EXIT_PERSIST_MISSING,
-      reason: `trusted PostToolUse root persistence is missing a successful ${REQUIRED_PERSIST_OPERATION} operation`,
+      reason: `trusted PostToolUse root persistence is missing a successful ${REQUIRED_PERSIST_OPERATION} outcome after the latest work`,
     };
   }
-  const verified = successful
-    .slice(firstWriteIndex + 1)
-    .some((entry) => entry.operation === 'list_records');
+  const lastRecordWriteIndex = trusted.findLastIndex((entry) => entry.success
+    && entry.operation === REQUIRED_PERSIST_OPERATION);
+  const verified = trusted
+    .slice(lastRecordWriteIndex + 1)
+    .some((entry) => entry.success && entry.operation === 'list_records');
   if (!verified) {
     return {
       ok: false,

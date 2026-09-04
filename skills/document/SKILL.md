@@ -41,7 +41,9 @@ Create or update a record for:
 6. Otherwise create one focused record with the appropriate `kind`, `status`,
    title prefix, and body.
 7. Link related records with `reqall:upsert_link` when relationships are
-   clear.
+   clear. Prefer inline `links` if the exposed `upsert_record` schema supports
+   them, checking each link result. Use `work` or `info` only when those kinds
+   appear in the current tool schema; otherwise use issue/todo/arch/spec/test.
 8. Output a one-line summary, or `Nothing to document.` when skipped.
 
 ## Helper Commands

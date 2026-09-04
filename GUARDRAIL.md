@@ -25,9 +25,23 @@ Context requires successful calls to:
 - `search`
 - `list_records`
 
-Final persistence requires a successful `upsert_record`, followed by a
-successful `list_records` verification. `upsert_link` and `sleep_apply`
+Final persistence requires a successful outcome `upsert_record` after the
+latest observed mutation/test, followed by a successful `list_records` after
+the latest record write. A subsequent edit, test, or record write makes the
+corresponding milestone incomplete again. Open spec/arch writes are intent,
+not final outcomes. `upsert_link` and `sleep_apply`
 evidence remains useful, but neither substitutes for the work-item record.
+
+MCP names must identify Reqall; another server's `search` or `upsert_record`
+does not qualify. Legacy bare operation names remain supported. Structured
+MCP errors, JSON-serialized failures, and running command handles do not
+qualify as successful results.
+
+Successful structured reads/writes of spec/arch records retain at most 20
+record IDs and kinds in task state. `SessionStart` on compaction/resume and
+the Stop continuation restore these hints for intent reconciliation. Titles,
+bodies, and transcripts are not copied into state. Older state without
+intent hints remains readable.
 
 ## Commands
 

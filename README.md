@@ -5,8 +5,12 @@ Persistent semantic memory and lifecycle guardrails for Codex agents.
 Reqall gives Codex a repeatable memory workflow:
 
 1. Gather relevant project context before non-trivial work.
-2. Capture concrete tool, mutation, subagent, and verification evidence.
-3. Persist meaningful outcomes before the root turn ends.
+2. Record agreed new behavior or architecture as intent when appropriate.
+3. Capture concrete tool, mutation, subagent, and verification evidence.
+4. Persist outcomes and reconcile intent before the root turn ends.
+
+The September 2026 compatibility review, fixes, and validation boundaries are
+documented in [EVALUATION.md](EVALUATION.md).
 
 ## Capability Status
 
@@ -16,6 +20,7 @@ location. No `hooks` field is required in `.codex-plugin/plugin.json`.
 The hook layer now provides:
 
 - `SessionStart` and `UserPromptSubmit` context-contract injection
+- intent ID recovery on `SessionStart` with `source: compact` or `resume`
 - all-tool `PreToolUse` mutation gating until Reqall context is complete
 - `PostToolUse` capture of successful Reqall operation IDs, edits, and tests
 - `SubagentStart` and `SubagentStop` context sharing and result notes
@@ -33,7 +38,7 @@ trust them, and start a new session.
 - `.app.json` - registered Reqall connector for interactive login
 - `.mcp.json` - Codex plugin MCP server declaration
 - `hooks/hooks.json` and `scripts/reqall-hook.mjs` - lifecycle automation
-- `skills/` - context, documentation, persistence, triage, review, and SLEEP
+- `skills/` - context, intent, documentation, persistence, triage, review, and SLEEP
   workflows with `agents/openai.yaml` metadata
 - `AGENTS.md` - host-independent workflow policy
 - `scripts/reqall-guardrail.mjs` - guardrail diagnostics and manual controls
@@ -70,6 +75,7 @@ Use Codex's plugin commands to inspect or refresh the installation:
 
 ```bash
 codex plugin list
+codex plugin marketplace upgrade reqall-plugins
 codex plugin add reqall@reqall-plugins
 ```
 
@@ -77,6 +83,11 @@ codex plugin add reqall@reqall-plugins
 
 The preferred plugin path is the registered connector in `.app.json`, where
 Codex owns interactive login and reauthentication.
+
+The HTTP declaration retains the optional `REQALL_API_KEY` bearer-token
+override. Current Codex also supports native MCP OAuth when no explicit
+credential resolves. Reqall does not need a Claude-specific `headersHelper`
+or credential-file reader in its Codex hooks.
 
 The plugin supplies both a registered app connector and its MCP server
 declaration, so a separate `codex mcp add` is not needed for a normal plugin
@@ -118,14 +129,25 @@ For a non-trivial turn, successful tool calls must provide these concrete
 milestones:
 
 1. Context: `upsert_project`, `search`, and `list_records`.
-2. Persistence: `upsert_record` for each meaningful work item. `upsert_link`
+2. Persistence: an outcome `upsert_record` after the latest observed work.
+   Open spec/arch intent writes do not replace an outcome. `upsert_link`
    and `sleep_apply` are supplemental and cannot replace the work-item record.
-3. Verification: `list_records` after the required `upsert_record`.
+3. Verification: `list_records` after the latest successful record write.
+
+`reqall:intend` reuses or creates a spec/arch only for agreed behavior or
+architecture. At persistence, link completed outcomes with `implements`,
+tests with `tests`, and remaining gaps with `blocks`. Skills use `work`,
+`info`, and inline `links` when the host exposes those schema features;
+older connectors keep using the supported issue/todo/arch/spec/test kinds.
 
 `PostToolUse` stores the Codex tool-call ID, normalized operation, timestamp,
 success flag, and hashes of the input/result. User prompts are represented by
 a one-way task digest. Raw prompts, shell commands, and tool results are not
 stored. Free-form evidence strings cannot satisfy the guardrail.
+Spec/arch IDs and kinds from structured Reqall results are retained as bounded
+intent hints; record titles and bodies are not stored locally. Structured
+error envelopes and still-running shell commands are not successful evidence.
+Tools from unrelated MCP servers cannot satisfy Reqall milestones.
 
 A narrow allowlist of non-executing repository inspection commands is
 available before context. Test runners execute repository code and are not on
@@ -176,6 +198,11 @@ Events carrying a turn ID never fall back to a different turn's current state,
 so delayed tool results cannot complete a newer task's milestones.
 Set `REQALL_GUARDRAIL_MAX_AGE_MS` only when a different bounded freshness
 window is required.
+
+After compaction or resume, the session's existing contract and intent IDs
+are restored through `SessionStart`. Compaction hooks do not perform memory
+writes or block compaction. New user tasks still start fresh context state;
+retrieve related intent through Reqall when continuing across tasks.
 
 ## Helper CLI
 
@@ -228,7 +255,7 @@ Requires Node.js 20 or newer.
 
 ```bash
 npm test
-npm pack --dry-run
+npm pack --dry-run --cache /tmp/reqall-npm-cache
 python <plugin-creator>/scripts/validate_plugin.py .
 ```
 

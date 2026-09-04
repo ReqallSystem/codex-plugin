@@ -29,9 +29,10 @@ non-trivial Codex work.
 
 ## P1: Server Contract And Recall Quality
 
-1. Structured MCP output
-   - Add output schemas and `structuredContent` while retaining concise text.
-   - Add accurate read-only, destructive, open-world, and OAuth metadata.
+1. Server/connector schema parity
+   - Current Reqall tools supply `structuredContent` and concise text.
+   - Keep newer `work`/`info` kinds and inline `links` capability-aware until
+     every connected host exposes them.
 
 2. Diff-aware record drafting
    - Convert mutation evidence into focused record proposals without storing
@@ -70,3 +71,17 @@ non-trivial Codex work.
   behavioral tests.
 - `SessionEnd` is advisory and cannot keep a turn alive, so final enforcement
   remains on `Stop`.
+- `prompt`/`agent` hook handlers are currently skipped by Codex. MCP tool
+  hooks do not trigger nested lifecycle evidence and need an already-ready
+  connection; they cannot replace the current guardrail without a redesign.
+- Full model-driven install/login/compaction evaluations remain separate from
+  deterministic hook tests; see EVALUATION.md for the checked baseline.
+
+## Implemented In 2026.9.1
+
+- Agreed intent skill and capability-aware outcome reconciliation, adapted
+  from the Claude plugin without Claude-specific plan or auth hooks.
+- Bounded spec/arch ID recovery on compaction/resume.
+- Reqall-specific tool recognition and structured error handling.
+- Persistence freshness after work and verification after the latest write.
+- Synchronized npm/manifest/lock versions and package regression checks.

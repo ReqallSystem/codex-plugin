@@ -35,6 +35,7 @@ with host-specific prefixes, but they correspond to these operations:
 Use the bundled skills when available:
 
 - `reqall:context` - initialize the project and gather relevant context
+- `reqall:intend` - record agreed behavior or architecture before implementation
 - `reqall:document` - capture one meaningful tool action or work item
 - `reqall:persist` - persist all meaningful session outcomes
 - `reqall:triage` - classify and prioritize incoming issues or requests
@@ -131,6 +132,8 @@ Run this before editing files or running substantial commands.
 7. If changing existing tracked behavior, call `reqall:list_links` and
    `reqall:impact`.
 8. Proceed with implementation using this context.
+   For agreed new behavior or architecture, first reuse or create a spec/arch
+   with `reqall:intend`. Skip intent records for routine fixes and chores.
 
 ## Incremental Documentation
 
@@ -160,6 +163,14 @@ Run this before the final user-facing answer.
    remaining open follow-ups.
 
 Never rely on the user to remind you to persist.
+
+Reconcile agreed intent with the actual outcomes: `implements` for completed
+work, `tests` for verification, and an open follow-up linked with `blocks`
+for remaining gaps. Use `work`, `info`, and inline `links` only if the host's
+Reqall tool schema supports them; otherwise retain the defaults below.
+The final outcome write must follow the latest mutation/test, and verification
+must follow the latest record write. An open spec/arch intent write alone is
+not final persistence.
 
 ## Classification Defaults
 

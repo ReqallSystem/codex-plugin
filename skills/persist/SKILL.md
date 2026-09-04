@@ -22,6 +22,12 @@ Reqall. Create one record per distinct work item.
 | Ongoing verification evidence | test | active |
 | Trivial or no-op work | -- | skip |
 
+Use the tool schema exposed by this host. If it supports `work`, prefer one
+`work` record for the session's progress (`resolved` when complete, `active`
+when ongoing); if it supports `info`, use it for durable reference knowledge.
+Otherwise use the table above. Never send unsupported kinds. Retain distinct
+bug, decision, verification, and follow-up records when they are useful.
+
 ## Title Prefixes
 
 - Issues: `BUG:`, `TASK:`, `BLOCKER:`, `QUESTION:`
@@ -46,7 +52,9 @@ Reqall. Create one record per distinct work item.
    `kind`, `status`, `title`, and a body explaining what changed, why it
    matters, and relevant file paths or command evidence.
 4. Link related records.
-   Use `reqall:search` to find related records. Call `reqall:upsert_link`
+   Use `reqall:search` to find related records. Prefer inline `links` on
+   `upsert_record` when the tool schema supports it; check per-link results.
+   Otherwise, or to connect existing records, call `reqall:upsert_link`
    when relationships are clear:
    - fixes or implementations use `implements`
    - verification uses `tests`
@@ -54,6 +62,11 @@ Reqall. Create one record per distinct work item.
    - general associations use `related`
    - parent/child specifications use `parent`
 5. Persist unresolved follow-ups as open `issue` or `todo` records.
+   Reconcile spec/arch IDs from `reqall:intend`, the hook's intent hints, or
+   the conversation. Read their acceptance criteria. Link fulfilled outcomes
+   with `implements`, tests with `tests`, and follow-ups for gaps with
+   `blocks`. Update superseded intent to the agreed scope; do not close a
+   standing spec just because an implementation completed.
 6. Call `reqall:list_records` for the project and ensure the completed work
    was represented.
 7. Report what was persisted in the final response.
@@ -68,6 +81,10 @@ reqall-guardrail check
 Trusted plugin hooks capture successful Reqall persistence tool-call IDs. The
 guardrail passes only after a persistence write and a later `list_records`
 verification; a free-form completion claim does not qualify.
+The outcome write must follow the latest observed mutation/test, and the
+verification must follow the latest record write. Open spec/arch intent
+writes do not substitute for outcomes. If you edit or test again, update
+the outcome record and verify again before ending the turn.
 
 ## Failure Mode
 

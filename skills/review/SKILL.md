@@ -11,6 +11,7 @@ user input.
 ## Workflow
 
 1. Identify the project and call `reqall:upsert_project`.
+   Run `reqall:search` for the requested review scope before changing records.
 2. Fetch records with `reqall:list_records` using `project_id` and
    `status: "open"`. Apply a `kind` filter if the user requested one.
 3. Present records by kind, title, and status. Call `reqall:get_record` when

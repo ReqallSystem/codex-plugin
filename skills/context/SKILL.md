@@ -27,6 +27,8 @@ Load project context from Reqall before starting non-trivial work.
 7. If changing existing tracked behavior, call `reqall:list_links` and
    `reqall:impact` for the relevant record.
 8. Summarize relevant records, open items, and impact findings concisely.
+9. For agreed new behavior or architecture, use `reqall:intend` before
+   implementation. Reuse an existing spec/arch when it already fits.
 
 ## Helper Commands
 

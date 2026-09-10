@@ -26,8 +26,8 @@ Context requires successful calls to:
 - `list_records`
 
 Final persistence requires a successful outcome `upsert_record` after the
-latest observed mutation/test, followed by a successful `list_records` after
-the latest record write. A subsequent edit, test, or record write makes the
+latest observed mutation/test, followed by exact `get_record` and outgoing `list_links` readbacks for
+every current-revision outcome, then a project-scoped `list_records`. A subsequent edit, test, or record write makes the
 corresponding milestone incomplete again. Open spec/arch writes are intent,
 not final outcomes. `upsert_link` and `sleep_apply`
 evidence remains useful, but neither substitutes for the work-item record.
@@ -40,8 +40,8 @@ qualify as successful results.
 Successful structured reads/writes of spec/arch records retain at most 20
 record IDs and kinds in task state. `SessionStart` on compaction/resume and
 the Stop continuation restore these hints for intent reconciliation. Titles,
-bodies, and transcripts are not copied into state. Older state without
-intent hints remains readable.
+bodies, and transcripts are not copied into state. State format 4 rejects older task formats. Persist before upgrading and
+start a fresh thread. Consulted hints are distinct from written commitments.
 
 ## Commands
 
@@ -121,3 +121,24 @@ newer. Marketplace installation does not install Node or enforce
 `package.json` engines. If `node` is unavailable, the hook command cannot
 start, so automatic enforcement is unavailable. Standalone MCP configuration
 does not depend on Node.
+
+## Typed reconciliation
+
+A trusted project response must bind the exact requested name and numeric ID.
+PreToolUse captures a revision before an outcome upsert; a result without that
+snapshot cannot qualify. New work advances the revision. Every outcome in the
+current batch needs matching project/kind/status/title/body fingerprints and
+complete outgoing link pagination. Explicit endpoint tables and relationships
+are checked, and written/selected intent must have an `implements` edge or an
+open todo `blocks` edge. Read-only consultation never selects a commitment.
+
+Partial inline-link saves keep their record IDs pending even if link repair
+succeeds. A same-ID recovery upsert followed by exact readbacks is required.
+Unfinished verification survives subsequent turns and project switches in
+project-specific session buckets; context evidence remains per-turn. A later
+batch may supersede earlier outcomes only by representing all unfinished work.
+No record bodies/titles are stored: fingerprints support exact comparisons.
+
+Subscriptions have a separate session store and optional explicit-key transport.
+They cannot satisfy context or outcome evidence. See README for auth, delivery,
+account-vs-session attribution, and advisory SessionEnd limitations.

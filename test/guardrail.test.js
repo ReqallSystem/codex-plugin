@@ -1,3 +1,4 @@
+import { resolveProjectName } from '../scripts/lib/project.mjs';
 import assert from 'node:assert/strict';
 import { mkdtempSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -26,16 +27,23 @@ function begin(box, session = 'session-1', turn = 'turn-1') {
 }
 
 function postReqall(box, operation, toolUseId, overrides = {}) {
-  return runNode(HOOK, [], {
-    ...box,
-    input: hookInput('PostToolUse', {
-      tool_name: `mcp__reqall__${operation}`,
-      tool_use_id: toolUseId,
-      tool_input: {},
-      tool_response: { isError: false, content: [{ type: 'text', text: 'ok' }] },
-      ...overrides,
-    }),
-  });
+  const project = resolveProjectName(box.cwd, { ...process.env, ...box.env });
+  const record = { id: 90, project_id: 7, kind: 'todo', status: 'resolved', title: 'Outcome', body: 'Verified work' };
+  const input = operation === 'upsert_project' ? { name: project } : operation === 'list_records' ? { project_id: 7 } : {};
+  const data = operation === 'upsert_project' ? { project: { id: 7, name: project } }
+    : operation === 'upsert_record' ? { record } : { records: [], total: 0 };
+  const common = { tool_name: `mcp__reqall__${operation}`, tool_use_id: toolUseId,
+    tool_input: input, tool_response: { structuredContent: { ok: true, data } }, ...overrides };
+  if (operation === 'upsert_record') runNode(HOOK, [], { ...box, input: hookInput('PreToolUse', common) });
+  if (operation === 'list_records') {
+    for (const [op, args, result] of [
+      ['get_record', { id: 90 }, { record }],
+      ['list_links', { entity_id: 90, entity_type: 'records', direction: 'outgoing' }, { links: [], total: 0 }],
+    ]) runNode(HOOK, [], { ...box, input: hookInput('PostToolUse', { ...overrides,
+      tool_name: `mcp__reqall__${op}`, tool_use_id: `${toolUseId}-${op}`, tool_input: args,
+      tool_response: { structuredContent: { ok: true, data: result } } }) });
+  }
+  return runNode(HOOK, [], { ...box, input: hookInput('PostToolUse', common) });
 }
 
 test('guardrail requires concrete context and persistence operations', () => {
@@ -136,7 +144,7 @@ test('manual CLI compatibility resolves the current task when turn ids are unava
   const status = runNode(GUARDRAIL, ['status'], box);
   assert.equal(status.status, 0);
   const state = parseJsonOutput(status);
-  assert.equal(state.version, 3);
+  assert.equal(state.version, 4);
   assert.match(state.task, /^task:[a-f0-9]+$/);
   assert.doesNotMatch(status.stdout, /manual task without hook identity/);
 
@@ -199,8 +207,8 @@ test('concurrent PostToolUse updates retain every required operation', async () 
       input: hookInput('PostToolUse', {
         tool_name: `mcp__reqall__${operation}`,
         tool_use_id: toolUseId,
-        tool_input: {},
-        tool_response: { isError: false, content: [] },
+        tool_input: operation === 'upsert_project' ? { name: resolveProjectName(box.cwd) } : { project_id: 7 },
+        tool_response: { structuredContent: { ok: true, data: operation === 'upsert_project' ? { project: { id: 7, name: resolveProjectName(box.cwd) } } : { records: [], total: 0 } } },
       }),
     })));
   assert.deepEqual(contextResults.map((result) => result.status), [0, 0, 0]);
@@ -222,16 +230,12 @@ test('concurrent PostToolUse updates retain every required operation', async () 
   }
 });
 
-function postReqallAsync(box, operation, toolUseId) {
-  return runNodeAsync(HOOK, [], {
-    ...box,
-    input: hookInput('PostToolUse', {
-      tool_name: `mcp__reqall__${operation}`,
-      tool_use_id: toolUseId,
-      tool_input: {},
-      tool_response: { isError: false, content: [] },
-    }),
-  });
+async function postReqallAsync(box, operation, toolUseId) {
+  const common = { tool_name: `mcp__reqall__${operation}`, tool_use_id: toolUseId,
+    tool_input: {}, tool_response: { structuredContent: { ok: true, data: operation === 'upsert_record'
+      ? { record: { id: 90, project_id: 7, kind: 'todo', status: 'resolved', title: 'Outcome', body: 'Verified work' } } : {} } } };
+  if (operation === 'upsert_record') runNode(HOOK, [], { ...box, input: hookInput('PreToolUse', common) });
+  return runNodeAsync(HOOK, [], { ...box, input: hookInput('PostToolUse', common) });
 }
 
 test('freshness rejects complete but expired state', () => {

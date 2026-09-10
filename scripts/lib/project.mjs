@@ -82,7 +82,13 @@ export function machineProjectName(env = process.env) {
   return `.machine/${clean(host).toLowerCase()}/${clean(user)}`;
 }
 
-export function resolveProjectName(cwd = process.cwd(), env = process.env) {
+export function promptProject(prompt = '') {
+  const matches = [...prompt.matchAll(/(?:^|\s)project_name\s*=\s*([A-Za-z0-9_-]+\/[A-Za-z0-9_.-]+)(?=\s|$)/g)];
+  const names = [...new Set(matches.map(m => m[1]))];
+  return names.length === 1 ? names[0] : '';
+}
+
+export function resolveProjectName(cwd = process.cwd(), env = process.env, prompt = '') {
   if (env.REQALL_PROJECT_NAME) {
     return env.REQALL_PROJECT_NAME;
   }
@@ -95,7 +101,7 @@ export function resolveProjectName(cwd = process.cwd(), env = process.env) {
 
   // Non-repo sessions are machine memory — never the directory basename
   // (which minted junk projects like "dev" or UUID worktree names).
-  return machineProjectName(env);
+  return promptProject(prompt) || machineProjectName(env);
 }
 
 export function resolveTaskSummary(args) {

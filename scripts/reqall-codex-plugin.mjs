@@ -45,12 +45,12 @@ function optionalPath(value) {
   return relative(process.cwd(), resolve(process.cwd(), value)) || '.';
 }
 
-function projectCommand() {
+function projectCommand(args) {
   console.log(resolveProjectName());
 }
 
 function contextCommand(args) {
-  const project = resolveProjectName();
+  const project = resolveProjectName(process.cwd(), process.env, resolveTaskSummary(args));
   const task = resolveTaskSummary(args);
   const file = optionalPath(args.file);
 
@@ -72,7 +72,7 @@ function preEditCommand(args) {
     fail('`pre-edit` requires --file <path>.');
   }
 
-  const project = resolveProjectName();
+  const project = resolveProjectName(process.cwd(), process.env, resolveTaskSummary(args));
   const file = optionalPath(args.file);
   const task = resolveTaskSummary(args);
 
@@ -105,7 +105,7 @@ function documentCommand(args) {
 }
 
 function persistCommand(args) {
-  const project = resolveProjectName();
+  const project = resolveProjectName(process.cwd(), process.env, resolveTaskSummary(args));
   const task = resolveTaskSummary(args);
 
   console.log('Final persistence checklist:');
@@ -119,14 +119,14 @@ function persistCommand(args) {
     'Persist verification as `kind=test`.',
     `Persist follow-ups${args['follow-up'] ? `: ${args['follow-up']}` : ' if any remain unresolved'}.`,
     `Persist test/build evidence${args.tests ? `: ${args.tests}` : ''}.`,
-    'Write outcomes after the latest mutation/test, then list records after the latest record write.',
+    'Write outcomes after the latest mutation/test, read back exact records and outgoing links, then list project records.',
     'Let trusted hooks capture the persistence write and verification tool-call IDs.',
   ]);
 }
 
 function reviewCommand(args) {
   const scope = args.scope || 'open';
-  const project = resolveProjectName();
+  const project = resolveProjectName(process.cwd(), process.env, resolveTaskSummary(args));
 
   console.log('Review workflow checklist:');
   printList('', [
@@ -154,7 +154,7 @@ function main() {
   }
   const command = args._[0];
 
-  if (command === 'project') return projectCommand();
+  if (command === 'project') return projectCommand(args);
   if (command === 'context') return contextCommand(args);
   if (command === 'pre-edit') return preEditCommand(args);
   if (command === 'document') return documentCommand(args);

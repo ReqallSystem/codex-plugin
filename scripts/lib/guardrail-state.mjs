@@ -1,3 +1,4 @@
+import { newVerification, captureWrite, observeVerification, verificationFailure } from './reconciliation.mjs';
 import {
   existsSync,
   mkdirSync,
@@ -12,7 +13,7 @@ import {
 import { createHash, randomUUID } from 'node:crypto';
 import { dirname, join, relative, resolve } from 'node:path';
 
-export const STATE_VERSION = 3;
+export const STATE_VERSION = 4;
 export const EXIT_NO_TASK = 10;
 export const EXIT_CONTEXT_MISSING = 11;
 export const EXIT_PERSIST_MISSING = 12;
@@ -32,6 +33,7 @@ export const PERSIST_WRITE_OPERATIONS = Object.freeze([
 ]);
 
 const REQALL_OPERATIONS = Object.freeze([
+  'subscribe_project', 'unsubscribe_project', 'list_subscriptions', 'poll_subscriptions',
   'sleep_candidates',
   'delete_project',
   'delete_record',
@@ -210,6 +212,21 @@ export function beginGuardrail({
   const root = stateRoot(cwd, env);
   const identity = makeIdentity({ sessionId, turnId, task, cwd });
   const startedAt = timestamp();
+  const previousIdentity = pointerFor(root, identity.sessionId);
+  const previous = previousIdentity ? readJson(statePath(root, previousIdentity)) : null;
+  let carried = null;
+  // Keep unfinished typed work across turns/projects; context evidence and consulted hints stay isolated.
+  updateSession({ cwd, env, sessionId: identity.sessionId }, session => {
+    session.workflows ||= {};
+    if (previous?.version === STATE_VERSION && previous.verification) {
+      const v = previous.verification;
+      const hasWork = v.revision > 0 || v.pending.length || v.commitments.length || Object.keys(v.outcomes).length;
+      if (hasWork && !evaluateGuardrail(previous, env).ok) session.workflows[previous.project] = v;
+      else delete session.workflows[previous.project];
+    }
+    carried = session.workflows[project] ? structuredClone(session.workflows[project]) : null;
+    if (carried) { carried.revision++; carried.starts = {}; carried.verifiedList = 0; }
+  });
   const state = {
     version: STATE_VERSION,
     sessionId: identity.sessionId,
@@ -221,6 +238,7 @@ export function beginGuardrail({
     task: taskLabel(task),
     nonTrivial: nonTrivial === true,
     evidence: [],
+    verification: carried || newVerification(),
     notes: [],
     degraded: null,
     stopContinuationIssuedAt: null,
@@ -264,6 +282,10 @@ function mutateGuardrail(options, updater) {
   });
 }
 
+export function capturePersistenceStart(options, callId) {
+  return mutateGuardrail(options, state => { captureWrite(state, callId); return state; });
+}
+
 export function setNonTrivial(options) {
   return mutateGuardrail(options, (state) => {
     state.nonTrivial = true;
@@ -297,6 +319,7 @@ export function recordToolEvidence(options, entry) {
     const fingerprint = evidenceFingerprint(normalized);
     if (!state.evidence.some((item) => evidenceFingerprint(item) === fingerprint)) {
       state.evidence.push(normalized);
+      observeVerification(state, normalized, entry.input, entry.result);
     }
     return state;
   });
@@ -393,12 +416,19 @@ export function isSuccessfulToolResponse(response) {
       if (parsed !== response) return isSuccessfulToolResponse(parsed);
     } catch { /* Legacy plain-text tool output. */ }
     return !(
-      /^\s*(?:tool call\s+)?(error|failed|failure|unauthorized)\b/i.test(response)
+      /^\s*(?:tool call\s+)?(error|failed|failure|unauthorized|blocked|denied|cancelled)\b/i.test(response)
       || /\b(?:exit(?:ed)?(?: with)? code|exit_code)\s*[:=]?\s*[1-9]\d*\b/i.test(response)
     );
   }
-  if (typeof response !== 'object') return true;
+  if (typeof response !== 'object') return response === true;
+  if (['failed', 'failure', 'error', 'blocked', 'denied', 'cancelled', 'unexecuted', 'partial'].includes(response.status)) return false;
   if (response.isError === true || response.error || response.ok === false || response.success === false) return false;
+  if (response.result && !isSuccessfulToolResponse(response.result)) return false;
+  if (response.data && !isSuccessfulToolResponse(response.data)) return false;
+  if (response.action === 'error') return false;
+  for (const key of ['links', 'link_results']) {
+    if (Array.isArray(response[key]) && response[key].some(l => l?.action === 'error' || l?.error || l?.ok === false)) return false;
+  }
   if (response.structuredContent && !isSuccessfulToolResponse(response.structuredContent)) return false;
   for (const block of Array.isArray(response.content) ? response.content : []) {
     if (block.type !== 'text') continue;
@@ -501,6 +531,10 @@ export function evaluateGuardrail(state, env = process.env) {
       reason: 'trusted PostToolUse root persistence is missing a successful list_records verification after its write',
     };
   }
+  if (state.verification) {
+    const reason = verificationFailure(state.verification);
+    if (reason) return { ok: false, code: EXIT_PERSIST_MISSING, reason };
+  }
   return { ok: true, code: 0, reason: 'context and persistence complete' };
 }
 
@@ -542,4 +576,18 @@ export function relativeStateLocation(cwd = process.cwd(), env = process.env) {
   const root = stateRoot(cwd, env);
   const local = relative(cwd, root);
   return local && !local.startsWith('..') ? local : root;
+}
+
+// Session lifetime state is independent of per-turn evidence; transactions never hold a lock over network I/O.
+export function updateSession(options, updater = s => s) {
+  const root = stateRoot(options.cwd, options.env);
+  const sid = options.sessionId;
+  if (typeof sid !== 'string' || !sid.trim()) return null;
+  const path = join(root, 'sessions', `${digest(sid)}.json`);
+  return withLock(root, `session:${sid}`, () => {
+    const state = readJson(path) || { project: '', projectId: null, subscribed: null, pending: [], ack: null };
+    updater(state);
+    writeJsonAtomic(path, state);
+    return state;
+  });
 }

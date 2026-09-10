@@ -85,3 +85,15 @@ non-trivial Codex work.
 - Reqall-specific tool recognition and structured error handling.
 - Persistence freshness after work and verification after the latest write.
 - Synchronized npm/manifest/lock versions and package regression checks.
+
+## Implemented In 2026.9.10
+
+- Exact outcome/link verification, work revision snapshots, and same-ID recovery.
+- Separate consulted hints and selected/written commitments; pending work survives turns.
+- Execution-aware activity tracking and labelled prompt project fallback.
+- Schema-aware per-link skill contracts and SLEEP work_review/promote/discard.
+- Session/project-scoped subscriptions via optional explicit-key hook transport,
+  cursor acknowledgement, bounded rendering, retry and advisory cleanup.
+
+Remaining integration gaps: automatic OAuth hook transport, server session-level
+write attribution, full live lifecycle validation, and Git-only memory noise.

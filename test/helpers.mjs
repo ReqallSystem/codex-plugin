@@ -8,7 +8,7 @@ export const HELPER = resolve(ROOT, 'scripts', 'reqall-codex-plugin.mjs');
 export const HOOK = resolve(ROOT, 'scripts', 'reqall-hook.mjs');
 
 function environment(overrides = {}) {
-  const result = { ...process.env, ...overrides };
+  const result = { ...process.env, REQALL_API_KEY: undefined, REQALL_SUBSCRIPTIONS: '0', ...overrides };
   for (const [key, value] of Object.entries(result)) {
     if (value === undefined || value === null) {
       delete result[key];

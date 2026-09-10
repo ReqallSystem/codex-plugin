@@ -117,7 +117,7 @@ bearer_token_env_var = "REQALL_API_KEY"
 
 
 Environment options read by the hooks: `REQALL_PROJECT_NAME` overrides project
-detection (else git `origin` as `org/repo`, else the machine project
+detection (else git `origin` as `org/repo`, else explicit `project_name=org/repo` in the prompt, else the machine project
 `.machine/<hostname>/<os-user>`); `REQALL_MACHINE_NAME` overrides the hostname
 segment of the machine project — set it in CI/containers with ephemeral
 hostnames.
@@ -132,7 +132,11 @@ milestones:
 2. Persistence: an outcome `upsert_record` after the latest observed work.
    Open spec/arch intent writes do not replace an outcome. `upsert_link`
    and `sleep_apply` are supplemental and cannot replace the work-item record.
-3. Verification: `list_records` after the latest successful record write.
+3. Verification: exact `get_record` and complete outgoing `list_links` for
+   every current-revision outcome, followed by project-scoped `list_records`.
+   Written/selected commitments need `implements` or an open todo `blocks`
+   edge; consulted records alone are not commitments. Partial saves stay pending
+   until successful same-ID recovery and fresh readback.
 
 `reqall:intend` reuses or creates a spec/arch only for agreed behavior or
 architecture. At persistence, link completed outcomes with `implements`,
@@ -201,8 +205,9 @@ window is required.
 
 After compaction or resume, the session's existing contract and intent IDs
 are restored through `SessionStart`. Compaction hooks do not perform memory
-writes or block compaction. New user tasks still start fresh context state;
-retrieve related intent through Reqall when continuing across tasks.
+writes or block compaction. New user tasks start fresh context evidence. Unfinished verification and
+partial-save IDs survive in project-specific session buckets; successfully
+verified work does not carry over. Retrieve related intent when continuing.
 
 ## Helper CLI
 
@@ -264,3 +269,45 @@ python <plugin-creator>/scripts/validate_plugin.py .
 ```bash
 npm publish --access public
 ```
+
+## Project subscriptions (2026.9.10)
+
+After trusted project binding, hooks subscribe once using
+`session_id` as subscriber and poll only that project. Subscription state is
+session-scoped, separate from task evidence. Project switches release the old
+cursor before subscribing the new project. `SessionEnd` attempts cleanup within
+its three-second budget; failed cleanup retains the cursor for retry on a later
+session hook. Abrupt process termination cannot guarantee cleanup.
+
+Automatic polling uses the existing optional `REQALL_API_KEY`. It never reads
+Codex OAuth files. OAuth-only installations use the connected subscription tools
+explicitly through the context skill; automatic polling/cleanup is unavailable
+without a hook credential. Set `REQALL_SUBSCRIPTIONS=0` to disable automatic
+polling. Self-hosted deployments set `REQALL_MCP_URL` to their HTTPS MCP endpoint
+(loopback HTTP is also accepted). Redirects are refused to protect credentials.
+
+Polls request five events, use `ack: false` / `ack_cursor` on supporting servers,
+and retain excess events locally for following turns. Rendered context contains
+record/event IDs and actions, not record bodies or titles. Unknown subscription
+tools disable polling once per session; transient failures retry next turn.
+Old servers that ignore acknowledgement fields retain at-most-once semantics
+on a lost response. Notifications are background context: fetch before relying
+on them. The server currently reports account-level `actor: self`, which cannot
+identify a writing session. Ambiguous events are retained; only an explicit
+matching event `session_id` is suppressed. This avoids hiding another session's
+edit to a record we also wrote, but own-write echoes remain possible.
+
+## Verified persistence (2026.9.10)
+
+PreToolUse snapshots the work revision before outcome writes. Trusted results
+retain record fingerprints, IDs, statuses and directed edges; Stop checks the
+complete current batch. New observed work invalidates older batches. A selected
+commitment is a same-ID intent upsert after reading and agreeing its criteria.
+CLI status/check are diagnostic, not acknowledgement overrides. State format 4
+starts fresh when upgrading from earlier guardrail formats; upgrade in a new
+thread after persisting active work.
+
+Blocked/unexecuted calls and failed atomic edits are not work. Executed shell
+commands with nonzero exits still count because they may have written files.
+Plain `cat` is read-only; compounds, redirects and substitutions remain gated.
+This does not yet solve Git-only operational persistence noise (tracked #4982).

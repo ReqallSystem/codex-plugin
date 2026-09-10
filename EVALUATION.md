@@ -1,3 +1,38 @@
+# Hermes port — 2026-09-10
+
+Prepared source version 2026.9.10 from the Hermes evaluation. Implemented typed
+persistence verification through trusted Codex tool events, execution-aware
+activity, explicit prompt fallback, tightened skill contracts and optional-key
+subscriptions. No install, marketplace, publication or host credential changes.
+
+The current [official hook reference](https://learn.chatgpt.com/docs/hooks)
+supports command SessionEnd hooks with a maximum three-second timeout. Cleanup
+uses that event; Stop remains the per-turn persistence gate. MCP tool hooks do
+not emit nested lifecycle events and cannot implement this evidence ledger.
+
+Subscriptions use existing explicit credentials only. OAuth-only automatic
+polling and exact self-session filtering need additional host/server support.
+The checked server source (`../reqall_net/server/src/mcp/subscriptions.ts` and
+`lib/project-events.ts`) provides acknowledgement cursors but only account-level
+actor identity. Keep ambiguous events rather than suppressing concurrent edits.
+Offline fixtures validate the client contract; they are not a live auth or
+production server compatibility claim. Unknown tools disable the feature once
+per session; older servers ignoring ack fields retain at-most-once delivery.
+
+State format 4 retains only typed metadata/fingerprints and event IDs/actions.
+Unfinished reconciliation carries across turns in project-specific buckets;
+context evidence remains isolated. Run live install/login/compaction/end tests
+before release. The existing Git-only persistence-noise issue remains open.
+
+Verification for 2026.9.10: all 58 regression tests pass, including real hook
+processes against an isolated loopback MCP server. All seven skills and the
+plugin manifest validate; npm pack dry-run includes both new runtime modules;
+git diff --check passes. Nested hook tests stall under this machine's sandbox
+process isolation, so the successful suite ran outside that sandbox with
+subscription credentials disabled except for the explicit loopback fixture.
+
+---
+
 # Reqall Codex plugin evaluation — 2026-09-04
 
 The plugin retains a suitable Codex integration architecture. This audit

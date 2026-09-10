@@ -28,3 +28,26 @@ user input.
 ```bash
 reqall-codex-plugin review --scope open
 ```
+
+
+## Record and link verification contract
+
+Use only fields and kinds exposed by this host. For inline links on
+`upsert_record`, set `target_id`, `target_table` (`records` or `projects`),
+`relationship`, and explicit `direction`. Outgoing means this record → target;
+incoming means target → this record. Cap each inline batch at 20 links.
+Check record success and every link result: `created` / `existing` succeed;
+`error`, missing results, or mismatched counts mean partial persistence.
+
+Read back saved IDs with `get_record`; check project, body, kind, and status.
+Read outgoing `list_links` with explicit `entity_type: records`, following
+all pages to `total`; verify both endpoint tables/IDs and relationships.
+Also read incoming links when an explicitly requested incoming edge needs proof.
+For separate `upsert_link`, supply `source_table`, `source_id`, `target_table`,
+`target_id`, and `relationship`; reverse endpoints for incoming links.
+After uncertain results, read first and retry only missing links. Never
+recreate a saved record after link failure. Repair links, read back, then
+perform a successful same-ID recovery `upsert_record` preserving verified
+fields; read record and links again. Failures remain pending until recovery.
+Finish the persistence batch with project-scoped `list_records` after these
+readbacks. A transport success or summary list alone is insufficient.

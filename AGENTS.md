@@ -77,14 +77,15 @@ When the plugin hooks are trusted, they enforce this flow automatically:
    results.
 4. `SubagentStart` and `SubagentStop` share status and capture notes; the root
    agent remains responsible for final persistence.
-5. `Stop` requires a successful `upsert_record` followed by `list_records`
-   verification. Links and SLEEP operations are supplemental. It continues an
+5. `Stop` requires a successful current-revision outcome `upsert_record` followed by exact
+   `get_record`, outgoing `list_links`, and project `list_records` verification. Links and SLEEP operations are supplemental. It continues an
    incomplete turn at most once.
 
 Do not replace concrete tool evidence with free-form claims. Manual
 `mark-context`, `mark-document`, and `mark-persist` commands are diagnostic
 only and never satisfy the guardrail, even when they receive a tool-looking
-identifier. Only evidence emitted by the trusted `PostToolUse` hook qualifies.
+identifier. Only evidence emitted by the trusted `PostToolUse` hook qualifies; trusted
+`PreToolUse` captures the work revision before each outcome write.
 Use `reqall-guardrail status` or `reqall-guardrail check` for diagnostics.
 
 Before context is complete, Bash uses a conservative read-only allowlist.
@@ -119,6 +120,7 @@ Run this before editing files or running substantial commands.
 1. Resolve project name in this order:
    - `REQALL_PROJECT_NAME`
    - git remote repo name as `org/repo`
+   - an explicit `project_name=org/repo` label in the prompt
    - the machine project `.machine/<hostname>/<os-user>` (never the current
      directory name; `REQALL_MACHINE_NAME` overrides the hostname segment)
 2. Call `reqall:upsert_project` with that exact name and store `project_id`.
@@ -201,3 +203,22 @@ not final persistence.
   permission change.
 - If Reqall MCP is unavailable, continue the user task and state clearly
   that automatic context or persistence could not run.
+
+## Verified persistence additions (2026.9.10)
+
+Consulted spec/arch reads are hints, not commitments. Select agreed existing
+intent with a same-ID upsert preserving verified fields. Written commitments
+require outcome → intent `implements` or open gap todo → intent `blocks` edges.
+Every current-revision outcome needs exact record and complete outgoing link
+readback; inspect all pages. Then list records scoped to the project.
+Check every inline link result (`created` / `existing`); errors, missing entries,
+or count mismatches are partial saves. Use explicit direction/endpoint tables
+and at most 20 inline links, only when the host exposes them. Never recreate a
+saved record after a link failure: repair, read back, recover via same-ID upsert,
+and verify again. Pending work survives turns in project-isolated session state.
+
+Automatic subscriptions use an explicitly configured REQALL_API_KEY and release
+on SessionEnd. OAuth-only sessions use exposed tools explicitly. Account-level
+actor=self is insufficient for own-session filtering; retain ambiguous updates.
+SLEEP may expose work_review candidates and promote/discard; use only supported
+operations and preserve durable knowledge.

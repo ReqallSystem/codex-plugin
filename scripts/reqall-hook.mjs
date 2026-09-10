@@ -1,8 +1,11 @@
 #!/usr/bin/env node
+import { bindSubscription, subscriptionTurn, subscriptionEnd } from './lib/subscriptions.mjs';
+import { payload } from './lib/reconciliation.mjs';
 
 import { readFileSync } from 'node:fs';
 import {
   CONTEXT_OPERATIONS,
+  capturePersistenceStart,
   PERSIST_WRITE_OPERATIONS,
   appendGuardrailNote,
   beginGuardrail,
@@ -16,6 +19,7 @@ import {
   reqallOperation,
   responseRecord,
   setNonTrivial,
+  updateSession,
   valueDigest,
 } from './lib/guardrail-state.mjs';
 import { resolveProjectName } from './lib/project.mjs';
@@ -64,7 +68,7 @@ function isNonTrivialPrompt(prompt) {
 
 function intentContext(state) {
   const ids = (state?.intents || []).map((record) => `#${record.id}`).join(', ');
-  return ids ? `Intent records read or written this task: ${ids}. Use get_record for criteria; link outcomes with implements and unresolved gaps with blocks.` : '';
+  return ids ? `Consulted intent hints (reads are not commitments): ${ids}. Use get_record for criteria; link outcomes with implements and unresolved gaps with blocks.` : '';
 }
 
 function contextContract(state) {
@@ -79,8 +83,9 @@ function contextContract(state) {
     'Before any mutation on non-trivial work, call Reqall upsert_project, search, and list_records (status open).',
     'Use get_record, list_links, and impact when tracked behavior or relevant hits need detail.',
     'For agreed new behavior or architecture, use reqall:intend after context and before edits; skip routine fixes and chores.',
+    `Session: ${state?.sessionId || 'unknown'}; work revision: ${state?.verification?.revision ?? 0}.`,
     'Successful Reqall tool-call IDs are captured automatically; free-form claims do not satisfy the guardrail.',
-    'Before the root turn ends, persist each meaningful outcome with upsert_record; links and SLEEP changes are supplemental. Verify with list_records.',
+    'Before the root turn ends, persist each meaningful outcome with upsert_record; links and SLEEP changes are supplemental. Read back each outcome with get_record and outgoing list_links, then verify with list_records. Same-ID upsert selects existing intent. Every written intent needs implements or open todo blocks coverage.',
     'Subagents may add notes, but the root agent owns final persistence.',
     intentContext(state),
   ];
@@ -105,7 +110,7 @@ function sessionStart(input) {
   ].join(' '));
 }
 
-function userPromptSubmit(input) {
+async function userPromptSubmit(input) {
   const prompt = typeof input.prompt === 'string' ? input.prompt : '';
   if (prompt.startsWith(CONTINUATION_MARKER)) {
     const current = loadGuardrail(options(input, true));
@@ -114,10 +119,14 @@ function userPromptSubmit(input) {
   const state = beginGuardrail({
     ...options(input, false),
     task: prompt,
-    project: resolveProjectName(input.cwd || process.cwd()),
+    project: resolveProjectName(input.cwd || process.cwd(), process.env, prompt),
     nonTrivial: isNonTrivialPrompt(prompt),
   });
-  return hookContext('UserPromptSubmit', contextContract(state));
+  updateSession(options(input), st => {
+    if (st.project !== state.project) { st.project = state.project; st.projectId = null; st.pending = []; st.ack = null; }
+  });
+  const updates = await subscriptionTurn(options(input));
+  return hookContext('UserPromptSubmit', [contextContract(state), updates].filter(Boolean).join('\n\n'));
 }
 
 function hasShellControlSyntax(command) {
@@ -180,7 +189,7 @@ function isSafeInspectionCommand(command) {
   const nodeCheck = /^node(?:\.exe)?\s+--check\s+(?:"(?!-)[A-Za-z0-9_./\\:+ \-]+"|'(?!-)[A-Za-z0-9_./\\:+ \-]+'|(?!-)[A-Za-z0-9_./\\:+\-]+)\s*$/i;
   return [
     /^(Get-Content|Get-ChildItem|Select-String|Test-Path|Resolve-Path|Get-Item|Get-Location|Get-Command|Get-FileHash|Get-Acl)(?:\s|$)/i,
-    /^(ls|dir|pwd|head|tail|wc|stat|file|which|where|type|more)(?:\.exe)?(?:\s|$)/i,
+    /^(cat|ls|dir|pwd|head|tail|wc|stat|file|which|where|type|more)(?:\.exe)?(?:\s|$)/i,
     nodeCheck,
     /^(node|npm|pnpm|yarn|python|python3|py|cargo|go|flutter|dart)(?:\.exe|\.cmd)?\s+--version\s*$/i,
   ].some((pattern) => pattern.test(command)) || isSafeGitInspection(command);
@@ -259,21 +268,23 @@ function preToolUse(input) {
   if (!state) {
     state = beginGuardrail({
       ...options(input, false),
-      task: 'mutation observed before UserPromptSubmit state',
+      task: 'action proposed before UserPromptSubmit state',
       project: resolveProjectName(input.cwd || process.cwd()),
-      nonTrivial: true,
+      nonTrivial: false,
     });
-  } else if (!state.nonTrivial) {
-    state = setNonTrivial(options(input, true));
   }
-  const evaluation = evaluateGuardrail(state);
+  // Gating a proposed action is not evidence that it executed.
+  const evaluation = evaluateGuardrail({ ...state, nonTrivial: true });
   if (evaluation.degraded) {
     return hookContext(
       'PreToolUse',
       'Reqall is unavailable in bounded degraded mode. Continue the user task, but disclose that Reqall context and persistence did not run.',
     );
   }
-  if (evaluation.ok || evaluation.code === 12) return null;
+  if (evaluation.ok || evaluation.code === 12) {
+    if (reqallOperation(input.tool_name) === 'upsert_record') capturePersistenceStart(options(input, true), input.tool_use_id);
+    return null;
+  }
   return {
     hookSpecificOutput: {
       hookEventName: 'PreToolUse',
@@ -317,12 +328,27 @@ function classifyReqallOutage(response) {
   return '';
 }
 
-function postToolUse(input) {
+function activityObserved(input, success) {
+  let result = input.tool_response;
+  if (typeof result === 'string') { try { result = JSON.parse(result); } catch { return success; } }
+  if (result?.executed === false || ['blocked', 'denied', 'cancelled', 'unexecuted'].includes(result?.status)) return false;
+  if (!isShellToolName(input.tool_name)) return success;
+  const code = result?.exit_code ?? result?.exitCode;
+  return success || result?.executed === true || (Number.isInteger(code) && code !== -1);
+}
+
+async function postToolUse(input) {
   const state = loadGuardrail(options(input, true));
   if (!state) return null;
   const operation = reqallOperation(input.tool_name);
   const success = isSuccessfulToolResponse(input.tool_response);
   if (operation) {
+    if (operation === 'upsert_project' && success) {
+      const project = payload(input.tool_response)?.project;
+      if (project?.name === state.project && input.tool_input?.name === state.project && Number.isSafeInteger(project.id)) {
+        bindSubscription(options(input), state.project, project.id);
+      }
+    }
     const record = ['upsert_record', 'get_record'].includes(operation)
       ? responseRecord(input.tool_response) : null;
     const kind = record?.kind ?? input.tool_input?.kind;
@@ -338,6 +364,7 @@ function postToolUse(input) {
       source: 'PostToolUse',
       inputDigest: valueDigest(input.tool_input),
       resultDigest: valueDigest(input.tool_response),
+      input: input.tool_input, result: input.tool_response,
     });
     if (success && record) recordIntent(options(input, true), record);
     if (!success && CONTEXT_OPERATIONS.includes(operation)) {
@@ -354,13 +381,17 @@ function postToolUse(input) {
         );
       }
     }
+    if (operation === 'upsert_project' && success) {
+      const updates = await subscriptionTurn(options(input));
+      if (updates) return hookContext('PostToolUse', updates);
+    }
     return null;
   }
 
   const mutation = isMutatingTool(input);
-  const test = isShellToolName(input.tool_name)
+  const test = mutation && isShellToolName(input.tool_name)
     && looksLikeTestCommand(shellCommand(input));
-  if (mutation || test) {
+  if ((mutation || test) && activityObserved(input, success)) {
     if (mutation && !state.nonTrivial) setNonTrivial(options(input, true));
     recordToolEvidence(options(input, true), {
       phase: test ? 'test' : 'document',
@@ -371,6 +402,7 @@ function postToolUse(input) {
       source: 'PostToolUse',
       inputDigest: valueDigest(input.tool_input),
       resultDigest: valueDigest(input.tool_response),
+      input: input.tool_input, result: input.tool_response,
     });
   }
   return null;
@@ -441,7 +473,7 @@ function stop(input) {
     ? 'The root must complete Reqall context with upsert_project, search, and list_records before finishing.'
     : evaluation.code === 13
       ? 'The root must begin a fresh Reqall task, reload context, and persist its outcome before finishing.'
-      : 'The root must persist each meaningful outcome with upsert_record, add links when useful, then verify with list_records before finishing.';
+      : 'The root must upsert current outcomes, read back each with get_record and complete outgoing list_links, cover committed intent, then verify with project list_records. Recover partial saves by same-ID upsert.';
   return {
     decision: 'block',
     reason: `${CONTINUATION_MARKER} ${action} ${intentContext(state)} Current guardrail status: ${evaluation.reason}.`,
@@ -451,6 +483,7 @@ function stop(input) {
 function dispatch(input) {
   switch (input.hook_event_name) {
     case 'SessionStart': return sessionStart(input);
+    case 'SessionEnd': return subscriptionEnd(options(input));
     case 'UserPromptSubmit': return userPromptSubmit(input);
     case 'PreToolUse': return preToolUse(input);
     case 'PostToolUse': return postToolUse(input);
@@ -462,7 +495,7 @@ function dispatch(input) {
 }
 
 try {
-  output(dispatch(readInput()));
+  output(await dispatch(readInput()));
 } catch (error) {
   console.error(`[reqall-hook] ${error.message}`);
   process.exit(1);

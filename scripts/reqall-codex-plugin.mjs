@@ -2,6 +2,19 @@
 
 import { relative, resolve } from 'node:path';
 import { parseArgs, resolveProjectName, resolveTaskSummary } from './lib/project.mjs';
+import { loadGuardrail } from './lib/guardrail-state.mjs';
+
+function commandProject(args) {
+  if (typeof args.project === 'string' && args.project.trim()) return args.project.trim();
+  const sessionId = args.session || process.env.REQALL_SESSION_ID || process.env.CODEX_SESSION_ID;
+  // Only consult the named host session, never an arbitrary latest/manual session.
+  const state = sessionId ? loadGuardrail({
+    sessionId,
+    turnId: args.turn || process.env.REQALL_TURN_ID || process.env.CODEX_TURN_ID,
+    allowCurrent: true,
+  }) : null;
+  return state?.project || resolveProjectName(process.cwd(), process.env, resolveTaskSummary(args));
+}
 
 function fail(message, code = 1) {
   console.error(`[reqall-codex-plugin] ${message}`);
@@ -46,11 +59,11 @@ function optionalPath(value) {
 }
 
 function projectCommand(args) {
-  console.log(resolveProjectName());
+  console.log(commandProject(args));
 }
 
 function contextCommand(args) {
-  const project = resolveProjectName(process.cwd(), process.env, resolveTaskSummary(args));
+  const project = commandProject(args);
   const task = resolveTaskSummary(args);
   const file = optionalPath(args.file);
 
@@ -72,7 +85,7 @@ function preEditCommand(args) {
     fail('`pre-edit` requires --file <path>.');
   }
 
-  const project = resolveProjectName(process.cwd(), process.env, resolveTaskSummary(args));
+  const project = commandProject(args);
   const file = optionalPath(args.file);
   const task = resolveTaskSummary(args);
 
@@ -105,7 +118,7 @@ function documentCommand(args) {
 }
 
 function persistCommand(args) {
-  const project = resolveProjectName(process.cwd(), process.env, resolveTaskSummary(args));
+  const project = commandProject(args);
   const task = resolveTaskSummary(args);
 
   console.log('Final persistence checklist:');
@@ -126,7 +139,7 @@ function persistCommand(args) {
 
 function reviewCommand(args) {
   const scope = args.scope || 'open';
-  const project = resolveProjectName(process.cwd(), process.env, resolveTaskSummary(args));
+  const project = commandProject(args);
 
   console.log('Review workflow checklist:');
   printList('', [

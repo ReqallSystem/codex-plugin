@@ -52,7 +52,7 @@ function identityArgs(args) {
 function begin(args) {
   const project = typeof args.project === 'string' && args.project.trim()
     ? args.project.trim()
-    : resolveProjectName();
+    : resolveProjectName(process.cwd(), process.env, args.task || '');
   const state = beginGuardrail({
     ...identityArgs(args),
     project,

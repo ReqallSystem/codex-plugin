@@ -22,7 +22,7 @@ import {
   updateSession,
   valueDigest,
 } from './lib/guardrail-state.mjs';
-import { resolveProjectName } from './lib/project.mjs';
+import { resolveProjectName, promptProject } from './lib/project.mjs';
 
 const CONTINUATION_MARKER = '[Reqall guardrail continuation]';
 
@@ -78,8 +78,9 @@ function contextContract(state) {
     : evaluation.ok || evaluation.code === 12 ? 'complete' : evaluation.reason;
   const contract = [
     'Reqall memory autopilot is active for this plugin.',
-    `Project: ${state?.project || 'resolve from REQALL_PROJECT_NAME, git origin, or the machine project .machine/<hostname>/<os-user>'}.`,
+    `Project: ${state?.project || 'resolve from REQALL_PROJECT_NAME → network git origin → labelled prompt/retained selection → ancestor .reqall.yml/.yaml → package.json/go.mod/Cargo.toml → known workspace-relative path → .machine/<short-lower-hostname>/<os-user>'}.`,
     `Context status: ${status}.`,
+    'Reuse this host-bound identity for all recall and persistence; do not re-resolve mid-turn.',
     'Before any mutation on non-trivial work, call Reqall upsert_project, search, and list_records (status open).',
     'Use get_record, list_links, and impact when tracked behavior or relevant hits need detail.',
     'For agreed new behavior or architecture, use reqall:intend after context and before edits; skip routine fixes and chores.',
@@ -112,14 +113,17 @@ function sessionStart(input) {
 
 async function userPromptSubmit(input) {
   const prompt = typeof input.prompt === 'string' ? input.prompt : '';
-  if (prompt.startsWith(CONTINUATION_MARKER)) {
+  if (prompt.startsWith(CONTINUATION_MARKER) || /^\s*<(?:task-notification|agent-notification|subagent-notification)\b/i.test(prompt)) {
     const current = loadGuardrail(options(input, true));
     return hookContext('UserPromptSubmit', contextContract(current));
   }
+  const session = updateSession(options(input), st => {
+    st.selectedProject = promptProject(prompt) || st.selectedProject || '';
+  });
   const state = beginGuardrail({
     ...options(input, false),
     task: prompt,
-    project: resolveProjectName(input.cwd || process.cwd(), process.env, prompt),
+    project: resolveProjectName(input.cwd || process.cwd(), process.env, prompt, session?.selectedProject),
     nonTrivial: isNonTrivialPrompt(prompt),
   });
   updateSession(options(input), st => {

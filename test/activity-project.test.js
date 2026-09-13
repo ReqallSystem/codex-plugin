@@ -5,14 +5,56 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { promptProject, resolveProjectName } from '../scripts/lib/project.mjs';
 import { loadGuardrail } from '../scripts/lib/guardrail-state.mjs';
-import { HOOK, ROOT, hookInput, runNode, parseJsonOutput } from './helpers.mjs';
-test('labelled project fallback has deterministic precedence and rejects prose, paths, conflicts', t => {
+import { HELPER, HOOK, ROOT, hookInput, runNode, parseJsonOutput } from './helpers.mjs';
+test('labelled project fallback has deterministic precedence and rejects unlabelled prose and paths', t => {
   const cwd = mkdtempSync(join(tmpdir(), 'reqall-project-')); t.after(() => rmSync(cwd, { recursive: true, force: true }));
   assert.equal(resolveProjectName(cwd, {}, 'please project_name=org/repo'), 'org/repo');
   assert.equal(resolveProjectName(cwd, { REQALL_PROJECT_NAME: 'env/project' }, 'project_name=org/repo'), 'env/project');
   assert.equal(resolveProjectName(ROOT, {}, 'project_name=org/other'), 'ReqallSystem/codex-plugin');
-  for (const text of ['src/auth.py', 'please org/repo', 'https://example.com/org/repo', 'project_name=org/repo/path', 'project_name=a/b project_name=c/d']) assert.equal(promptProject(text), '');
+  assert.equal(promptProject('project_name=org/repo/path'), 'org/repo/path');
+  assert.equal(promptProject('project_name=a/b project_name=c/d'), 'a/b');
+  for (const text of ['src/auth.py', 'please org/repo', 'https://example.com/org/repo']) assert.equal(promptProject(text), '');
 });
+test('CLI helpers reuse the exact hook session binding and retain operation overrides', t => {
+  const cwd = mkdtempSync(join(tmpdir(), 'reqall-cli-binding-'));
+  t.after(() => rmSync(cwd, { recursive: true, force: true }));
+  const env = {
+    PLUGIN_DATA: cwd, REQALL_PROJECT_NAME: undefined,
+    REQALL_SESSION_ID: undefined, CODEX_SESSION_ID: undefined,
+    REQALL_TURN_ID: undefined, CODEX_TURN_ID: undefined,
+  };
+  for (const [session_id, project] of [['session-1', 'selected/one'], ['session-2', 'selected/two']]) {
+    const result = runNode(HOOK, [], { cwd, env, input: hookInput('UserPromptSubmit', {
+      cwd, session_id, prompt: `implement project_name=${project}`,
+    }) });
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, new RegExp(`Project: ${project}`));
+  }
+  for (const command of ['persist', 'context', 'pre-edit', 'review', 'project']) {
+    const invoke = (extra = [], overrides = {}) => {
+      const result = runNode(HELPER, [command, '--task', 'continue implementation', '--file', 'src/test.js', ...extra], {
+        cwd, env: { ...env, ...overrides },
+      });
+      assert.equal(result.status, 0, result.stderr);
+      return result.stdout;
+    };
+    assert.match(invoke(['--session', 'session-1']), /selected\/one/, command);
+    assert.match(invoke([], { REQALL_SESSION_ID: 'session-1' }), /selected\/one/, command);
+    assert.match(invoke([], { CODEX_SESSION_ID: 'session-1' }), /selected\/one/, command);
+    assert.match(invoke(['--session', 'session-1'], { REQALL_SESSION_ID: 'session-2', REQALL_PROJECT_NAME: 'changed/env' }), /selected\/one/, command);
+    assert.match(invoke(['--session', 'session-1', '--project', 'explicit/operation']), /explicit\/operation/, command);
+    assert.match(invoke(['--session', 'session-1', '--turn', 'turn-1']), /selected\/one/, command);
+    assert.match(invoke([], { CODEX_SESSION_ID: 'session-1', CODEX_TURN_ID: 'turn-1' }), /selected\/one/, command);
+    assert.doesNotMatch(invoke(['--session', 'session-1', '--turn', 'other-turn']), /selected\/(one|two)/, command);
+    assert.match(invoke(['--session', 'missing-session']), /\.machine\//, command);
+    assert.match(invoke(), /\.machine\//, command);
+    assert.match(invoke(['--task', 'project_name=standalone/prompt']), /standalone\/prompt/, command);
+    assert.match(invoke(['--session', 'session-1', '--task', 'project_name=changed/prompt']), /selected\/one/, command);
+    assert.match(invoke([], { REQALL_PROJECT_NAME: 'standalone/env' }), /standalone\/env/, command);
+    assert.match(invoke(['--session', 'session-1']), /selected\/one/, 'override must not mutate host binding');
+  }
+});
+
 test('blocked calls and failed atomic edits stay clean; executed nonzero commands still invalidate', t => {
   const cwd = mkdtempSync(join(tmpdir(), 'reqall-activity-')); t.after(() => rmSync(cwd, { recursive: true, force: true }));
   const env = { PLUGIN_DATA: cwd, REQALL_API_KEY: undefined };

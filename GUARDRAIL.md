@@ -132,6 +132,14 @@ complete outgoing link pagination. Explicit endpoint tables and relationships
 are checked, and written/selected intent must have an `implements` edge or an
 open todo `blocks` edge. Read-only consultation never selects a commitment.
 
+Empty complete outgoing lists are valid. A separate link between current outcomes
+is proved once at its source; if the source is not current, the target needs
+incoming proof. Explicit inline incoming requests still need incoming readback.
+Missing-edge diagnostics identify direction and both endpoints. Stop asks for
+the missing evidence, not an unconditional rewrite of already saved records.
+Do not invent reverse links to clear a diagnostic. Capture discoveries made
+during recovery: mechanical verification does not establish semantic coverage.
+
 Partial inline-link saves keep their record IDs pending even if link repair
 succeeds. A same-ID recovery upsert followed by exact readbacks is required.
 Unfinished verification survives subsequent turns and project switches in

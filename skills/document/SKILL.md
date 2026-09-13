@@ -1,106 +1,28 @@
 ---
 name: document
-description: Document a single meaningful tool action or work item in Reqall.
+description: Capture a meaningful work item or new finding in Reqall during ongoing work; skip routine tool-call logs.
 ---
 
-# Document Work Item
+# Document a Work Item
 
-Use this for incremental persistence of one meaningful work item. It is
-lighter than the full `persist` skill, which covers the whole session.
+Capture a durable behavior change, decision, bug, or useful verification while
+its details are fresh. Reuse the project bound during context; if context is
+missing, use the context skill first.
 
-## Skip Cases
+1. Identify what another session should learn: what changed or was discovered,
+   why it matters, evidence, limitations and remaining work.
+2. Reuse a matching recalled record; search when coverage is unclear. Update it
+   rather than adding a duplicate. Classify bugs as issue, implementation or
+   follow-ups as todo, decisions as arch, requirements as spec, evidence as test.
+   Use resolved for completed work and open for unresolved work.
+3. Save with upsert_record. Link only when a real relationship adds meaning.
+   A workaround may complete an action while leaving a newly discovered bug open.
+4. Read back the record and its complete outgoing links, then project list_records.
+   See [persist](../persist/SKILL.md) for partial saves, explicit incoming links,
+   intent coverage and final session reconciliation.
 
-Do not create a record for:
-
-- read-only operations such as file reads, searches, or listings
-- trivial or failed commands with no finding
-- formatting-only changes with no semantic impact
-- test runs that produced no new evidence or decision
-- no-op edits
-
-## Record Cases
-
-Create or update a record for:
-
-- substantive file creation or edits
-- bug fixes or newly discovered bugs
-- build, release, or configuration changes
-- database migrations
-- new specifications or architecture decisions
-- verification that should be discoverable later
-
-## Workflow
-
-1. Identify the tool activity that just completed.
-2. List touched files and the behavioral change.
-3. Capture completed work, verification evidence, unresolved issues, and
-   follow-ups.
-4. Search with `reqall:search` for related existing records.
-5. Prefer updating an existing matching record with `reqall:upsert_record`
-   over creating a duplicate.
-6. Otherwise create one focused record with the appropriate `kind`, `status`,
-   title prefix, and body.
-7. Link related records with `reqall:upsert_link` when relationships are
-   clear. Prefer inline `links` if the exposed `upsert_record` schema supports
-   them, checking each link result. Use `work` or `info` only when those kinds
-   appear in the current tool schema; otherwise use issue/todo/arch/spec/test.
-8. Output a one-line summary, or `Nothing to document.` when skipped.
-
-## Helper Commands
-
-```bash
-reqall-codex-plugin document --tool edit --files src/a.js,src/b.js --summary "brief summary"
-```
-
-Trusted plugin hooks capture concrete mutation and test evidence
-automatically; raw commands and tool results are not persisted in guardrail
-state.
-
-
-## Record and link verification contract
-
-Use only fields and kinds exposed by this host. For inline links on
-`upsert_record`, set `target_id`, `target_table` (`records` or `projects`),
-`relationship`, and explicit `direction`. Outgoing means this record → target;
-incoming means target → this record. Cap each inline batch at 20 links.
-Check record success and every link result: `created` / `existing` succeed;
-`error`, missing results, or mismatched counts mean partial persistence.
-
-Read back saved IDs with `get_record`; check project, body, kind, and status.
-Read outgoing `list_links` with explicit `entity_type: records`, following
-all pages to `total`; verify both endpoint tables/IDs and relationships.
-Also read incoming links when an explicitly requested incoming edge needs proof.
-For separate `upsert_link`, supply `source_table`, `source_id`, `target_table`,
-`target_id`, and `relationship`; reverse endpoints for incoming links.
-After uncertain results, read first and retry only missing links. Never
-recreate a saved record after link failure. Repair links, read back, then
-perform a successful same-ID recovery `upsert_record` preserving verified
-fields; read record and links again. Failures remain pending until recovery.
-Finish the persistence batch with project-scoped `list_records` after these
-readbacks. A transport success or summary list alone is insufficient.
-
-## Project identity contract
-
-Reuse the exact host-provided project identity throughout recall, work, persistence, and verification. Without a host binding, resolve: trimmed `REQALL_PROJECT_NAME` → network Git `origin` (final two path segments, trailing slash/`.git` removed) → explicitly labelled `project_name`/`project` prompt selection or retained session selection → nearest valid ancestor `.reqall.yml`/`.reqall.yaml` → nearest package identity (`package.json`, `go.mod`, `Cargo.toml` at each directory) → exact cwd-relative path within a known workspace → `.machine/<short-lower-hostname>/<os-user>`. Never infer identity from arbitrary slash tokens or an unconstrained directory basename. Labels accept `:`/`=` and plain, single/double-quoted, or backtick values; first labelled match wins, not synthetic report examples. Environment and network Git override retained selections at the next turn; mid-turn hooks reuse the bound identity. `REQALL_MACHINE_NAME` overrides the whole sanitized lowercase host segment (including deliberate dots); use the OS account, not USER/USERNAME.
-
-Read regular UTF-8 metadata files ≤64 KiB. Reqall YAML supports simple top-level string `project` (preferred) or `name`, matching quotes and trailing comments; reject duplicate keys, malformed quotes, nested/complex values, booleans/null/numbers. Package identity is string `package.json.name` (valid `@scope/name` becomes `scope/name`), complete Go `module`, or simple quoted Cargo `[package] name`. Skip invalid/unreadable values. Automatic identities allow ASCII letters/digits/`_-.` in nonempty slash segments; reject absolute/drive/UNC/backslash/tilde and `.`/`..` segments. Search ancestors through the containing workspace root inclusive, otherwise filesystem root. `REQALL_WORKSPACE_ROOT` (cwd-relative or `~/` supported), else nearest regular `.reqall-workspace`, sets the boundary; resolve symlinks before containment, do not replace an invalid explicit root with a marker, and do not use an empty root-relative identity. Preserve all relative segments. Deliberate manual SLEEP targets override automatic discovery; account preferences may deliberately target `.user`.
-
-
-## Git-only bookkeeping
-
-A routine request to commit/push existing work does not itself create new durable
-knowledge. Successful standalone `git add`, `git commit`, and `git push` calls
-remain context-gated, but their trusted evidence is operational: they do not
-advance the work revision, invalidate verified outcomes, or promote a trivial
-turn to substantive work. Do not create duplicate records or a memory footer
-solely for these operations; useful commit references may update an existing
-substantive record.
-
-This exemption is deliberately narrow. Failed calls, compound shell commands,
-Git aliases/global options, merge/rebase, tests, edits and unknown tools retain
-conservative classification. Substantive requests still require persistence,
-as do findings or decisions discovered during bookkeeping. Pending outcomes and
-selected commitments survive Git-only follow-up turns and must be reconciled.
-The classifier sees tool calls, not hidden Git-hook side effects: report and
-persist substantive edits or verification performed by a Git hook. Tracker
-administration is not automatically exempted by this mitigation.
+Skip no-ops, reads with no finding, repeated test evidence, and standalone
+successful Git add/commit/push with no substantive discovery. Do not create a
+record for each tool call or invent a link to satisfy a guardrail. When work
+continues, retain concise notes for final persistence; incremental saves do not
+replace coverage of the latest work revision.

@@ -82,3 +82,57 @@ test('requested incoming and outgoing links survive partial recovery and require
   h.call('list_links', { entity_id: 10, entity_type: 'records', direction: 'incoming' }, { links: [edge(21, 10, 'related')], total: 1 });
   h.call('list_records', { project_id: 7 }, {}); assert.equal(h.failure(), '');
 });
+
+test('test-to-release link needs one source readback, not a reverse edge or record rewrites', () => {
+  const h = harness(); const release = h.record(10); const verification = h.record(11, 'test');
+  h.write(release); h.write(verification);
+  h.read(release); h.read(verification);
+  h.call('upsert_link', edge(11, 10, 'tests'), {});
+  assert.match(h.failure(), /outgoing list_links.*#11/);
+  // Complete but empty cannot prove a requested edge.
+  h.read(verification);
+  assert.match(h.failure(), /list_links outgoing for records#11; expected records#11 --tests--> records#10/);
+  h.read(verification, [edge(11, 10, 'tests')]);
+  assert.equal(h.failure(), '');
+  assert.deepEqual(h.state.verification.outcomes[10].links, []);
+  assert.equal(h.state.verification.outcomes[10].incoming, null);
+});
+
+test('a link from an untracked source still requires target incoming proof', () => {
+  const h = harness(); h.write(); h.read();
+  h.call('upsert_link', edge(21, 10, 'tests'), {});
+  assert.match(h.failure(), /list_links incoming for records#10; expected records#21 --tests--> records#10/);
+  h.call('list_links', { entity_id: 10, entity_type: 'records', direction: 'incoming' }, { links: [edge(21, 10, 'tests')], total: 1 });
+  h.call('list_records', { project_id: 7 }, {});
+  assert.equal(h.failure(), '');
+});
+
+test('project and record IDs with the same number still require incoming proof', () => {
+  const h = harness(); h.write(); h.read();
+  const link = { ...edge(10, 10, 'related'), source_table: 'projects' };
+  h.call('upsert_link', link, {});
+  assert.match(h.failure(), /list_links incoming for records#10; expected projects#10/);
+  h.call('list_links', { entity_id: 10, entity_type: 'records', direction: 'incoming' }, { links: [link], total: 1 });
+  h.call('list_records', { project_id: 7 }, {});
+  assert.equal(h.failure(), '');
+});
+
+test('stale source cannot discharge a current target link requirement', () => {
+  const h = harness(); h.write(); h.write(h.record(11, 'test'));
+  h.call('upsert_link', edge(11, 10, 'tests'), {});
+  h.call('mutation', {}, {}); h.write(); h.read();
+  assert.match(h.failure(), /list_links incoming for records#10/);
+});
+
+test('explicit inline incoming proof remains required even when the source proves the edge', () => {
+  const h = harness();
+  h.call('upsert_record', { links: [{ target_id: 11, target_table: 'records', relationship: 'tests', direction: 'incoming' }] },
+    { record: h.record(), links: [{ action: 'created' }] });
+  h.write(h.record(11, 'test'));
+  h.call('upsert_link', edge(11, 10, 'tests'), {});
+  h.read(); h.read(h.record(11, 'test'), [edge(11, 10, 'tests')]);
+  assert.match(h.failure(), /list_links incoming for records#10/);
+  h.call('list_links', { entity_id: 10, entity_type: 'records', direction: 'incoming' }, { links: [edge(11, 10, 'tests')], total: 1 });
+  h.call('list_records', { project_id: 7 }, {});
+  assert.equal(h.failure(), '');
+});

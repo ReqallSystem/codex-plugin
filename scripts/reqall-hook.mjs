@@ -492,7 +492,7 @@ function stop(input) {
     ? 'The root must complete Reqall context with upsert_project, search, and list_records before finishing.'
     : evaluation.code === 13
       ? 'The root must begin a fresh Reqall task, reload context, and persist its outcome before finishing.'
-      : 'The root must upsert current outcomes, read back each with get_record and complete outgoing list_links, cover committed intent, then verify with project list_records. Recover partial saves by same-ID upsert.';
+      : 'Repair only the missing evidence below, then verify with project list_records. Reuse saved outcomes; rewrite only for new work, changed content or partial-save recovery. Do not invent records or links to satisfy the guardrail. Capture any substantive finding discovered during recovery.';
   return {
     decision: 'block',
     reason: `${CONTINUATION_MARKER} ${action} ${intentContext(state)} Current guardrail status: ${evaluation.reason}.`,

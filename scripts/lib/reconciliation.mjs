@@ -39,12 +39,17 @@ export function observeVerification(state, entry, input = {}, result) {
   if (op === 'upsert_link' && entry.success) {
     const edge = { source_id: input.source_id, source_table: input.source_table,
       target_id: input.target_id, target_table: input.target_table, relationship: input.relationship };
-    for (const [id, table] of [[input.source_id, input.source_table], [input.target_id, input.target_table]]) {
-      if (table !== 'records' || !v.outcomes[id]) continue;
+    const source = input.source_table === 'records' && v.outcomes[input.source_id];
+    const target = input.target_table === 'records' && v.outcomes[input.target_id];
+    // Retain both endpoints across revisions, but verify a separate edge once
+    // at its current source (see verificationFailure).
+    for (const [id, out] of [[input.source_id, source], [input.target_id, target]]) {
+      if (!out) continue;
       v.required[id] ||= [];
       if (!v.required[id].some(e => hash(e) === hash(edge))) v.required[id].push(edge);
-      v.outcomes[id].links = null; v.outcomes[id].incoming = null;
     }
+    if (source) source.links = null;
+    if (target) target.incoming = null;
   }
   if (op === 'list_links' && !entry.success && v.outcomes[input.entity_id]) v.outcomes[input.entity_id].links = null;
   if (op === 'list_links' && entry.success && input.entity_type === 'records' && ['outgoing', 'incoming'].includes(input.direction)) {
@@ -82,11 +87,16 @@ export function observeVerification(state, entry, input = {}, result) {
   const links = data.link_results ?? data.links;
   if (Array.isArray(expected)) {
     v.required[rec.id] ||= [];
+    v.explicitIncoming ||= {};
     for (const e of expected) {
       const edge = e.direction === 'incoming'
         ? { source_id: e.target_id, source_table: e.target_table, target_id: rec.id, target_table: 'records', relationship: e.relationship }
         : { source_id: rec.id, source_table: 'records', target_id: e.target_id, target_table: e.target_table, relationship: e.relationship };
       if (!v.required[rec.id].some(old => hash(old) === hash(edge))) v.required[rec.id].push(edge);
+      if (e.direction === 'incoming') {
+        v.explicitIncoming[rec.id] ||= [];
+        if (!v.explicitIncoming[rec.id].includes(hash(edge))) v.explicitIncoming[rec.id].push(hash(edge));
+      }
     }
   }
   const linksOk = !Array.isArray(expected) || (expected.length <= 20 && Array.isArray(links)
@@ -119,9 +129,17 @@ export function verificationFailure(v) {
     if (!(out.readAt > out.writtenAt) || !out.links || !(out.linksAt > out.writtenAt)) return `get_record and complete outgoing list_links readback required for #${id}`;
     if (v.verifiedList <= Math.max(out.writtenAt, out.readAt, out.linksAt)) return 'list_records verification must follow exact record/link readbacks';
     for (const expected of v.required[id] || []) {
-      const incoming = expected.target_table === 'records' && expected.target_id === Number(id) && expected.source_id !== Number(id);
+      const incoming = expected.target_table === 'records' && expected.target_id === Number(id)
+        && !(expected.source_table === 'records' && expected.source_id === Number(id));
+      // Separate writes register both endpoints. The source's required edge
+      // and exact readback suffice; inline incoming requests remain explicit.
+      const sourceOwnsProof = incoming && expected.source_table === 'records'
+        && !v.explicitIncoming?.[id]?.includes(hash(expected))
+        && current.some(([sourceId]) => Number(sourceId) === expected.source_id)
+        && v.required[expected.source_id]?.some(e => hash(e) === hash(expected));
+      if (sourceOwnsProof) continue;
       const candidates = incoming ? out.incoming : out.links;
-      if (!candidates?.some(e => hash(e) === hash(expected))) return `required link readback missing for #${id}`;
+      if (!candidates?.some(e => hash(e) === hash(expected))) return `required link readback missing: list_links ${incoming ? 'incoming' : 'outgoing'} for records#${id}; expected ${expected.source_table}#${expected.source_id} --${expected.relationship}--> ${expected.target_table}#${expected.target_id}`;
       if (incoming && (!(out.incomingAt > out.writtenAt) || v.verifiedList <= out.incomingAt)) return `incoming list_links verification required for #${id}`;
     }
     for (const link of out.links) {

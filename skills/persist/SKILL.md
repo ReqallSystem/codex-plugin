@@ -1,157 +1,75 @@
 ---
 name: persist
-description: Classify and persist all meaningful work completed in the current Codex session.
+description: Save and verify meaningful session outcomes in Reqall, reusing existing records and capturing unresolved findings.
 ---
 
-# Persist Work
+# Persist Meaningful Outcomes
 
-Before ending a non-trivial turn, classify the completed work and save it to
-Reqall. Create one record per distinct work item.
+Save knowledge another session can use: changed behavior, why it changed,
+verification and its limits, decisions, and unresolved findings. Tool-call
+completion is evidence, not a reason to create a record for every action.
 
-## Classification
+## Choose what to save
 
-| Work type | kind | status |
-| --- | --- | --- |
-| Bug fixed | issue | resolved |
-| New unfixed bug | issue | open |
-| Completed implementation | todo | resolved |
-| Follow-up task | todo | open |
-| Architecture decision | arch | resolved |
-| New or updated spec | spec | open |
-| Test or build evidence | test | resolved |
-| Ongoing verification evidence | test | active |
-| Trivial or no-op work | -- | skip |
+- Reuse the host-bound project and completed context. If unbound, apply the
+  identity contract below and run upsert_project, search, and open list_records.
+- Compare the actual outcomes with records recalled this turn. Update matching
+  records; create a new one only for a distinct finding or work item. A release
+  summary should not substitute for documenting substantive behavior changes.
+- Include discoveries made while testing or recovering from tool/guardrail
+  failures. Distinguish observed facts from suspected causes; a workaround
+  does not resolve the underlying issue.
+- Skip no-ops and duplicate operational logs. Successful standalone Git
+  add/commit/push needs no new record or memory footer by itself. New findings,
+  edits, test evidence and pending commitments still require persistence.
+- Use the host's supported kinds: issue for bugs, todo for implementation or
+  follow-ups, arch for decisions, spec for requirements, test for verification.
+  Mark completed work resolved and unresolved work open. Preserve useful test
+  evidence separately; do not split one finding into records for each tool call.
 
-Use the tool schema exposed by this host. If it supports `work`, prefer one
-`work` record only for ephemeral session progress (`resolved` when complete, `active`
-when ongoing); if it supports `info`, use it for durable reference knowledge.
-Otherwise use the table above. Never send unsupported kinds. Retain distinct
-bug, decision, verification, and follow-up records when they are useful.
+## Save and verify
 
-## Title Prefixes
+1. Write the selected outcomes after the latest edits/tests. Describe behavior,
+   rationale, evidence and limitations. Preserve verified fields on same-ID
+   updates. Inspect guardrail status when pending work or commitments are unclear;
+   diagnostic CLI claims never substitute for trusted tool results.
+2. Add links only for real relationships. Cover selected/written intent with
+   outcome → intent implements, or open todo → intent blocks for a remaining gap.
+   Merely reading a spec is not a commitment. Tests may link with tests.
+3. Read each saved outcome with get_record and complete outgoing list_links
+   (entity_type: records; follow pages through total). Check project, content,
+   kind, status and exact link endpoints. An empty complete list is valid:
+   records do not need an outgoing link merely to pass verification.
+4. For separate upsert_link, verify at the tracked source. If only its target
+   is a saved outcome, verify incoming there. Explicit inline incoming links
+   also require incoming proof. A source readback needs no duplicate target
+   read or reverse edge unless an explicit incoming requirement exists.
+5. Finish with project-scoped list_records after all record/link readbacks.
+   Report saved knowledge and remaining gaps briefly.
 
-- Issues: `BUG:`, `TASK:`, `BLOCKER:`, `QUESTION:`
-- Specs and architecture: `ARCH:`, `API:`, `AUTH:`, `DATA:`, `UI:`
-- Features and refactors: `FEAT:`, `REFACTOR:`
-- Verification: `TEST:`
+## Recover only what failed
 
-## Workflow
+Use the diagnostic's record ID, direction and expected edge. Missing readback
+means read the saved data; it does not by itself mean rewrite the record.
+Never create filler records or reverse/related links just to clear a hook.
+Hooks verify evidence mechanically; they cannot establish semantic coverage.
 
-1. Identify the project using the Project identity contract below. Call `reqall:upsert_project` with that exact name and retain `project_id`.
+For a partial save, keep the saved ID. Read first, repair only genuinely missing
+requested links, then perform a same-ID recovery upsert and reverify. Do not
+recreate the record. New edits/tests require fresh outcome writes and readbacks;
+a readback-only retry does not. If recovery reveals a real defect, capture that
+finding rather than treating a cleared guardrail as proof it was fixed.
 
-2. Enumerate work items.
-   Review files created or modified, bugs fixed or discovered, design
-   decisions, specs changed, tests or builds run, and follow-up tasks.
-3. Create or update records.
-   For each meaningful item, call `reqall:upsert_record` with `project_id`,
-   `kind`, `status`, `title`, and a body explaining what changed, why it
-   matters, and relevant file paths or command evidence.
-4. Link related records.
-   Use `reqall:search` to find related records. Prefer inline `links` on
-   `upsert_record` when the tool schema supports it; check per-link results.
-   Otherwise, or to connect existing records, call `reqall:upsert_link`
-   when relationships are clear:
-   - fixes or implementations use `implements`
-   - verification uses `tests`
-   - dependencies use `blocks`
-   - general associations use `related`
-   - parent/child specifications use `parent`
-5. Persist unresolved follow-ups as open `issue` or `todo` records.
-   Reconcile spec/arch IDs from `reqall:intend`, the hook's intent hints, or
-   the conversation. Read their acceptance criteria. Link fulfilled outcomes
-   with `implements`, tests with `tests`, and follow-ups for gaps with
-   `blocks`. Update superseded intent to the agreed scope; do not close a
-   standing spec just because an implementation completed.
-6. Read back every outcome and its outgoing links under the contract below.
-   Then call project-scoped `reqall:list_records`.
-7. Report what was persisted in the final response.
+When inline links are supported, supply target_id, target_table, relationship
+and direction; use at most 20. Check every created/existing result. Errors,
+missing results or count mismatches are partial saves. For separate links,
+supply source_table/source_id and target_table/target_id explicitly.
 
-## Helper Commands
-
-```bash
-reqall-codex-plugin persist --task "short task summary"
-reqall-guardrail check
-```
-
-Trusted plugin hooks capture successful Reqall persistence tool-call IDs. The
-guardrail passes only after exact record/link readbacks and a later project
-`list_records` verification; a free-form completion claim does not qualify.
-The outcome write must follow the latest observed mutation/test, and the
-verification must follow the latest record write. Open spec/arch intent
-writes do not substitute for outcomes. If you edit or test again, update
-the outcome record and verify again before ending the turn.
-
-## Failure Mode
-
-If Reqall MCP is unavailable or requires reauthentication:
-
-- continue the user task
-- state that automatic persistence could not run
-- do not claim that records were successfully stored
-
-
-## Record and link verification contract
-
-Use only fields and kinds exposed by this host. For inline links on
-`upsert_record`, set `target_id`, `target_table` (`records` or `projects`),
-`relationship`, and explicit `direction`. Outgoing means this record → target;
-incoming means target → this record. Cap each inline batch at 20 links.
-Check record success and every link result: `created` / `existing` succeed;
-`error`, missing results, or mismatched counts mean partial persistence.
-
-Read back saved IDs with `get_record`; check project, body, kind, and status.
-Read outgoing `list_links` with explicit `entity_type: records`, following
-all pages to `total`; verify both endpoint tables/IDs and relationships.
-Also read incoming links when an explicitly requested incoming edge needs proof.
-For separate `upsert_link`, supply `source_table`, `source_id`, `target_table`,
-`target_id`, and `relationship`; reverse endpoints for incoming links.
-After uncertain results, read first and retry only missing links. Never
-recreate a saved record after link failure. Repair links, read back, then
-perform a successful same-ID recovery `upsert_record` preserving verified
-fields; read record and links again. Failures remain pending until recovery.
-Finish the persistence batch with project-scoped `list_records` after these
-readbacks. A transport success or summary list alone is insufficient.
-
-## Work revision and acknowledgement
-
-Before outcome writes, inspect `reqall-guardrail status --session <actual session id>`
-for pending work and commitments. Trusted PreToolUse automatically captures the
-work revision before each upsert; CLI claims cannot substitute for that snapshot.
-Do not run new edits/tests during the persistence batch. If newer work occurs,
-update the outcomes to represent it and verify again. Every outcome written at
-the current revision requires exact readback; partial batches cannot clear work.
-Old outcomes may be superseded by a new batch that covers all actual work.
-
-Only written/selected commitments require coverage; consulted hints do not.
-Use outcome → intent `implements`, or an open todo → intent `blocks` for a real
-gap. A selected commitment cannot acknowledge itself by changing status. A
-standalone resolved architecture decision can be an outcome. The guardrail
-checks these edges from trusted readbacks at Stop; no Hermes `reqall_session`
-or second authentication path is needed. `reqall-guardrail check` diagnoses
-missing evidence but never fabricates it. Failed verification stays pending.
+If Reqall is unavailable, continue the user task and disclose that persistence
+could not run. Do not claim a save or successful verification without evidence.
 
 ## Project identity contract
 
 Reuse the exact host-provided project identity throughout recall, work, persistence, and verification. Without a host binding, resolve: trimmed `REQALL_PROJECT_NAME` → network Git `origin` (final two path segments, trailing slash/`.git` removed) → explicitly labelled `project_name`/`project` prompt selection or retained session selection → nearest valid ancestor `.reqall.yml`/`.reqall.yaml` → nearest package identity (`package.json`, `go.mod`, `Cargo.toml` at each directory) → exact cwd-relative path within a known workspace → `.machine/<short-lower-hostname>/<os-user>`. Never infer identity from arbitrary slash tokens or an unconstrained directory basename. Labels accept `:`/`=` and plain, single/double-quoted, or backtick values; first labelled match wins, not synthetic report examples. Environment and network Git override retained selections at the next turn; mid-turn hooks reuse the bound identity. `REQALL_MACHINE_NAME` overrides the whole sanitized lowercase host segment (including deliberate dots); use the OS account, not USER/USERNAME.
 
 Read regular UTF-8 metadata files ≤64 KiB. Reqall YAML supports simple top-level string `project` (preferred) or `name`, matching quotes and trailing comments; reject duplicate keys, malformed quotes, nested/complex values, booleans/null/numbers. Package identity is string `package.json.name` (valid `@scope/name` becomes `scope/name`), complete Go `module`, or simple quoted Cargo `[package] name`. Skip invalid/unreadable values. Automatic identities allow ASCII letters/digits/`_-.` in nonempty slash segments; reject absolute/drive/UNC/backslash/tilde and `.`/`..` segments. Search ancestors through the containing workspace root inclusive, otherwise filesystem root. `REQALL_WORKSPACE_ROOT` (cwd-relative or `~/` supported), else nearest regular `.reqall-workspace`, sets the boundary; resolve symlinks before containment, do not replace an invalid explicit root with a marker, and do not use an empty root-relative identity. Preserve all relative segments. Deliberate manual SLEEP targets override automatic discovery; account preferences may deliberately target `.user`.
-
-
-## Git-only bookkeeping
-
-A routine request to commit/push existing work does not itself create new durable
-knowledge. Successful standalone `git add`, `git commit`, and `git push` calls
-remain context-gated, but their trusted evidence is operational: they do not
-advance the work revision, invalidate verified outcomes, or promote a trivial
-turn to substantive work. Do not create duplicate records or a memory footer
-solely for these operations; useful commit references may update an existing
-substantive record.
-
-This exemption is deliberately narrow. Failed calls, compound shell commands,
-Git aliases/global options, merge/rebase, tests, edits and unknown tools retain
-conservative classification. Substantive requests still require persistence,
-as do findings or decisions discovered during bookkeeping. Pending outcomes and
-selected commitments survive Git-only follow-up turns and must be reconciled.
-The classifier sees tool calls, not hidden Git-hook side effects: report and
-persist substantive edits or verification performed by a Git hook. Tracker
-administration is not automatically exempted by this mitigation.

@@ -215,6 +215,11 @@ intent with a same-ID upsert preserving verified fields. Written commitments
 require outcome → intent `implements` or open gap todo → intent `blocks` edges.
 Every current-revision outcome needs exact record and complete outgoing link
 readback; inspect all pages. Then list records scoped to the project.
+Empty complete link lists are valid. Separate links need proof at their current
+outcome source, or incoming proof at the target when that source is not current.
+Explicit inline incoming requests retain incoming verification. Missing reads
+require reads, not new records or invented links. Capture substantive discoveries
+during recovery; mechanical verification alone does not establish useful coverage.
 Check every inline link result (`created` / `existing`); errors, missing entries,
 or count mismatches are partial saves. Use explicit direction/endpoint tables
 and at most 20 inline links, only when the host exposes them. Never recreate a

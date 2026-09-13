@@ -306,10 +306,30 @@ thread after persisting active work.
 Blocked/unexecuted calls and failed atomic edits are not work. Executed shell
 commands with nonzero exits still count because they may have written files.
 Plain `cat` is read-only; compounds, redirects and substitutions remain gated.
-This does not yet solve Git-only operational persistence noise (tracked #4982).
+Git-only operational persistence noise is mitigated by the narrow bookkeeping contract below (tracked #4982).
 
 ## Project identity contract
 
 Reuse the exact host-provided project identity throughout recall, work, persistence, and verification. Without a host binding, resolve: trimmed `REQALL_PROJECT_NAME` → network Git `origin` (final two path segments, trailing slash/`.git` removed) → explicitly labelled `project_name`/`project` prompt selection or retained session selection → nearest valid ancestor `.reqall.yml`/`.reqall.yaml` → nearest package identity (`package.json`, `go.mod`, `Cargo.toml` at each directory) → exact cwd-relative path within a known workspace → `.machine/<short-lower-hostname>/<os-user>`. Never infer identity from arbitrary slash tokens or an unconstrained directory basename. Labels accept `:`/`=` and plain, single/double-quoted, or backtick values; first labelled match wins, not synthetic report examples. Environment and network Git override retained selections at the next turn; mid-turn hooks reuse the bound identity. `REQALL_MACHINE_NAME` overrides the whole sanitized lowercase host segment (including deliberate dots); use the OS account, not USER/USERNAME.
 
 Read regular UTF-8 metadata files ≤64 KiB. Reqall YAML supports simple top-level string `project` (preferred) or `name`, matching quotes and trailing comments; reject duplicate keys, malformed quotes, nested/complex values, booleans/null/numbers. Package identity is string `package.json.name` (valid `@scope/name` becomes `scope/name`), complete Go `module`, or simple quoted Cargo `[package] name`. Skip invalid/unreadable values. Automatic identities allow ASCII letters/digits/`_-.` in nonempty slash segments; reject absolute/drive/UNC/backslash/tilde and `.`/`..` segments. Search ancestors through the containing workspace root inclusive, otherwise filesystem root. `REQALL_WORKSPACE_ROOT` (cwd-relative or `~/` supported), else nearest regular `.reqall-workspace`, sets the boundary; resolve symlinks before containment, do not replace an invalid explicit root with a marker, and do not use an empty root-relative identity. Preserve all relative segments. Deliberate manual SLEEP targets override automatic discovery; account preferences may deliberately target `.user`.
+
+
+## Git-only bookkeeping
+
+A routine request to commit/push existing work does not itself create new durable
+knowledge. Successful standalone `git add`, `git commit`, and `git push` calls
+remain context-gated, but their trusted evidence is operational: they do not
+advance the work revision, invalidate verified outcomes, or promote a trivial
+turn to substantive work. Do not create duplicate records or a memory footer
+solely for these operations; useful commit references may update an existing
+substantive record.
+
+This exemption is deliberately narrow. Failed calls, compound shell commands,
+Git aliases/global options, merge/rebase, tests, edits and unknown tools retain
+conservative classification. Substantive requests still require persistence,
+as do findings or decisions discovered during bookkeeping. Pending outcomes and
+selected commitments survive Git-only follow-up turns and must be reconciled.
+The classifier sees tool calls, not hidden Git-hook side effects: report and
+persist substantive edits or verification performed by a Git hook. Tracker
+administration is not automatically exempted by this mitigation.

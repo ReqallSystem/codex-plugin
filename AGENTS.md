@@ -226,3 +226,23 @@ on SessionEnd. OAuth-only sessions use exposed tools explicitly. Account-level
 actor=self is insufficient for own-session filtering; retain ambiguous updates.
 SLEEP may expose work_review candidates and promote/discard; use only supported
 operations and preserve durable knowledge.
+
+
+## Git-only bookkeeping
+
+A routine request to commit/push existing work does not itself create new durable
+knowledge. Successful standalone `git add`, `git commit`, and `git push` calls
+remain context-gated, but their trusted evidence is operational: they do not
+advance the work revision, invalidate verified outcomes, or promote a trivial
+turn to substantive work. Do not create duplicate records or a memory footer
+solely for these operations; useful commit references may update an existing
+substantive record.
+
+This exemption is deliberately narrow. Failed calls, compound shell commands,
+Git aliases/global options, merge/rebase, tests, edits and unknown tools retain
+conservative classification. Substantive requests still require persistence,
+as do findings or decisions discovered during bookkeeping. Pending outcomes and
+selected commitments survive Git-only follow-up turns and must be reconciled.
+The classifier sees tool calls, not hidden Git-hook side effects: report and
+persist substantive edits or verification performed by a Git hook. Tracker
+administration is not automatically exempted by this mitigation.

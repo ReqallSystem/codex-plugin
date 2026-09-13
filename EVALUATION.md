@@ -115,3 +115,52 @@ OAuth behavior. Hosted tool paths can bypass hooks, and digest-only evidence
 cannot prove that every meaningful outcome was represented accurately.
 Model-driven evaluation cases should cover normal work, intent reuse,
 compaction, tool failure, interruption/resume, and unavailable Reqall.
+
+## Subscription parity follow-up — 2026-09-12 (#5403)
+
+Rechecked with installed `codex-cli 0.154.0`. `codex mcp --help` exposes
+configuration/login commands, but no command for invoking a connected MCP tool.
+The [official hook reference](https://learn.chatgpt.com/docs/hooks) documents
+MCP tool hooks on existing connections, without nested lifecycle events, and
+explicitly excludes `SessionEnd`. No supported command-hook OAuth bridge was
+identified. Do not read host OAuth storage, spawn an agent to borrow its
+credentials, or replace trusted persistence hooks with MCP tool hooks.
+The current session's Reqall connector exposes no subscribe/poll/unsubscribe
+tools; that observation is session-specific, not a claim about every host.
+
+Read-only inspection of `../reqall_net/server/src/mcp/subscriptions.ts` found
+`eventSchema` and `serializeEvent` return event IDs, project IDs and `actor`
+(`self` means the account), but no originating session or request identity.
+Current event IDs alone cannot identify which session caused a write. Local
+source inspection is not verification of the production deployment.
+
+Completed local safeguard: suppress only an event with both `actor: self` and
+an exact nonempty session-ID match. Retain missing/unknown/other actor identity,
+other sessions' writes and later writes to the same record. Never infer ownership
+from record IDs. This is forward-compatible defensive filtering; it does not
+make today's server emit session attribution.
+
+Requirements to unblock full parity (proposed upstream contracts):
+
+- Host transport: a supported bounded invocation channel from command hooks to
+  the existing authenticated connection, including advisory SessionEnd cleanup,
+  or a server-managed expiring lease with an explicitly agreed cleanup lifecycle.
+  It must preserve project/session binding and fail without affecting core
+  context/persistence. This is not available through the inspected CLI surface.
+- Server attribution: bind an originating session/request identity to each
+  successful mutation and propagate it through event creation/serialization.
+  Alternatively, return the exact event IDs caused by a successful mutation so
+  trusted PostToolUse can correlate them. Cover link/SLEEP/move operations and
+  multi-event writes; never equate account identity with a session.
+- Connector exposure: advertise subscription tools and their acknowledgement
+  fields to OAuth clients. Capability detection must preserve older-server
+  fallback behavior.
+- Integration acceptance: two sessions on one account editing the same record
+  must see each other's changes; own writes are suppressed only with exact
+  evidence. Test project switching, retries, lost responses/acknowledgements,
+  compaction, cleanup failure, and abrupt termination. Run the live OAuth
+  evaluation in #4832 before claiming parity or release readiness.
+
+The explicit-key transport remains available. Full #5403 is still open pending
+these host/server dependencies; no server, host configuration, or installed
+plugin was modified in this evaluation.

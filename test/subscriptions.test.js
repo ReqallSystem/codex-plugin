@@ -31,9 +31,24 @@ test('subscribes once per session and project; peeks and acknowledges previous p
   assert.equal(updateSession(h.options).subscribed, null);
 });
 test('preserves same-account other-session edits; suppresses only exact session attribution', async t => {
-  const h = setup(t); h.set([event(1, { actor: 'self' }), event(2, { session_id: 'session-1' }), event(3, { project_id: 8 })]);
+  const h = setup(t); h.set([event(1, { actor: 'self' }), event(2, { actor: 'self', session_id: 'session-1' }), event(3, { project_id: 8 })]);
   const text = await subscriptionTurn(h.options, h.client);
   assert.match(text, /record #101/); assert.doesNotMatch(text, /record #102|record #103/);
+});
+test('ambiguous or contradictory session attribution never suppresses updates', async t => {
+  const h = setup(t);
+  h.set([
+    event(1, { actor: 'other', session_id: 'session-1' }),
+    event(2, { actor: 'unknown', session_id: 'session-1' }),
+    event(3, { session_id: 'session-1' }),
+    event(4, { actor: 'self', session_id: 'other-session' }),
+    event(5, { actor: 'self', record_id: 101 }),
+  ]);
+  const text = await subscriptionTurn(h.options, h.client);
+  for (const id of [1, 2, 3, 4, 5]) assert.match(text, new RegExp(`event #${id}\\)`));
+  // Every retained event remains acknowledged only on the next poll.
+  h.set([]); await subscriptionTurn(h.options, h.client);
+  assert.equal(h.calls.filter(([name]) => name === 'poll_subscriptions')[1][1].ack_cursor, 99);
 });
 test('excess events survive rendering bounds and drain before another poll', async t => {
   const h = setup(t); h.set(Array.from({ length: 8 }, (_, i) => event(i)));

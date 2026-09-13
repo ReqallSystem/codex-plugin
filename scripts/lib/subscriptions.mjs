@@ -81,8 +81,11 @@ export async function subscriptionTurn(options, client = subscriptionClient(opti
       if (!Array.isArray(items)) return '';
       const item = items.find(i => i.subscription?.project_id === pid && i.subscription?.subscriber === options.sessionId);
       if (!item || !Array.isArray(item.events)) return '';
-      // Account-level actor=self is NOT session attribution. Suppress only an exact session identity.
-      const pending = item.events.filter(e => e.project_id === pid && e.session_id !== options.sessionId)
+      // Account identity alone is insufficient; a matching session with missing or
+      // contradictory actor identity is also ambiguous. Preserve it.
+      const pending = item.events.filter(e => e.project_id === pid && !(e.actor === 'self'
+          && typeof options.sessionId === 'string' && options.sessionId.length > 0
+          && e.session_id === options.sessionId))
         .map(e => ({ id: e.id, record_id: e.record_id, action: String(e.action).replace(/[^a-z._]/g, '').slice(0, 40) }));
       s = save(st => {
         if (st.projectId !== pid) return;

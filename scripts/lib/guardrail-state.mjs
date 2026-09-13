@@ -478,7 +478,9 @@ export function evaluateGuardrail(state, env = process.env) {
   if (!Number.isFinite(startedAt) || Date.now() - startedAt > maxAgeMs(env)) {
     return { ok: false, code: EXIT_STALE, reason: 'task state is stale or expired' };
   }
-  if (!state.nonTrivial) return { ok: true, code: 0, reason: 'trivial task' };
+  const v = state.verification;
+  const durableWork = v && (v.revision > 0 || v.pending.length || v.commitments.length || Object.keys(v.outcomes).length);
+  if (!state.nonTrivial && !durableWork) return { ok: true, code: 0, reason: 'trivial or bookkeeping-only task' };
 
   const successful = state.evidence.filter((entry) =>
     entry.success === true && entry.source === QUALIFYING_EVIDENCE_SOURCE);

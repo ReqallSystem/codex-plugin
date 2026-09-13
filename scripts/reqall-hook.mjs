@@ -63,6 +63,8 @@ function isNonTrivialPrompt(prompt) {
   if (typeof prompt !== 'string') return false;
   const value = prompt.trim();
   if (!value || /^(hi|hello|hey|thanks|thank you|ok|okay)[!.?\s]*$/i.test(value)) return false;
+  // Only explicit bookkeeping-only requests bypass prompt-level persistence.
+  if (/^(?:please\s+)?(?:git\s+)?(?:commit(?:\s+and\s+push)?|push)(?:\s+(?:(?:the|these|those|all|pending|existing|other)\s+)*(?:changes|stuff|work|commits))?[.!?\s]*$/i.test(value)) return false;
   return /\b(implement|update|change|edit|fix|debug|bug|refactor|migrat|architect|design|create|add|remove|test|build|review|audit|evaluate|inspect|assess|examine|research|analy[sz]e|investigate|diagnose|release|deploy|merge|document)\w*\b/i.test(value);
 }
 
@@ -80,6 +82,7 @@ function contextContract(state) {
     'Reqall memory autopilot is active for this plugin.',
     `Project: ${state?.project || 'resolve from REQALL_PROJECT_NAME → network git origin → labelled prompt/retained selection → ancestor .reqall.yml/.yaml → package.json/go.mod/Cargo.toml → known workspace-relative path → .machine/<short-lower-hostname>/<os-user>'}.`,
     `Context status: ${status}.`,
+    'Successful standalone git add/commit/push is bookkeeping: keep context gating, but do not create a record or memory footer solely for it. Persist substantive findings, edits, tests and pending commitments.',
     'Reuse this host-bound identity for all recall and persistence; do not re-resolve mid-turn.',
     'Before any mutation on non-trivial work, call Reqall upsert_project, search, and list_records (status open).',
     'Use get_record, list_links, and impact when tracked behavior or relevant hits need detail.',
@@ -208,6 +211,17 @@ function isSafeReadOnlyShell(command) {
 
 function isMutatingShell(command) {
   return !isSafeReadOnlyShell(command);
+}
+
+// This is a memory-density classification, never a pre-context safety allowlist.
+// Unknown syntax, Git global options/aliases and failed calls stay substantive.
+function isGitBookkeeping(input, success) {
+  const command = shellCommand(input);
+  return success && isShellToolName(input.tool_name)
+    && typeof command === 'string' && !hasShellControlSyntax(command)
+    && !/[$\\]/.test(command)
+    && !/--(?:exec|receive-pack|upload-pack)(?:=|\s|$)/i.test(command)
+    && /^git(?:\.exe)?\s+(?:add|commit|push)(?:\s|$)/i.test(command.trim());
 }
 
 function shellCommand(input) {
@@ -393,13 +407,14 @@ async function postToolUse(input) {
   }
 
   const mutation = isMutatingTool(input);
-  const test = mutation && isShellToolName(input.tool_name)
+  const operational = mutation && isGitBookkeeping(input, success);
+  const test = mutation && !operational && isShellToolName(input.tool_name)
     && looksLikeTestCommand(shellCommand(input));
   if ((mutation || test) && activityObserved(input, success)) {
-    if (mutation && !state.nonTrivial) setNonTrivial(options(input, true));
+    if (mutation && !operational && !state.nonTrivial) setNonTrivial(options(input, true));
     recordToolEvidence(options(input, true), {
       phase: test ? 'test' : 'document',
-      operation: test ? 'test' : 'mutation',
+      operation: operational ? 'operational' : test ? 'test' : 'mutation',
       toolName: input.tool_name,
       toolUseId: input.tool_use_id,
       success,

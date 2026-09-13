@@ -93,3 +93,61 @@ test('partial-save IDs survive later turns and project switches without inheriti
   state = loadGuardrail({ cwd, env, sessionId: 'session-1', turnId: 'turn-3', allowCurrent: true });
   assert.deepEqual(state.verification.pending, [10]); assert.deepEqual(state.evidence, []);
 });
+
+test('Git bookkeeping retains context gating without inventing durable work', t => {
+  const cwd = mkdtempSync(join(tmpdir(), 'reqall-git-only-'));
+  t.after(() => rmSync(cwd, { recursive: true, force: true }));
+  const env = { PLUGIN_DATA: cwd, REQALL_API_KEY: undefined };
+  const invoke = (event, extra = {}) => runNode(HOOK, [], { cwd, env, input: hookInput(event, { cwd, ...extra }) });
+  const options = { cwd, env, sessionId: 'session-1', turnId: 'turn-1', allowCurrent: true };
+  invoke('UserPromptSubmit', { prompt: 'Please commit and push the changes.' });
+  const call = { tool_name: 'functions.exec_command', tool_use_id: 'git', tool_input: { cmd: 'git commit -m "test: existing work"' } };
+  assert.equal(parseJsonOutput(invoke('PreToolUse', call)).hookSpecificOutput.permissionDecision, 'deny');
+  for (const operation of ['upsert_project', 'search', 'list_records']) {
+    invoke('PostToolUse', { tool_name: `reqall:${operation}`, tool_use_id: operation, tool_input: {}, tool_response: { isError: false } });
+  }
+  assert.equal(invoke('PreToolUse', call).stdout.trim(), '');
+  for (const cmd of ['git add .', 'git commit -m "test: existing work"', 'git push origin main']) {
+    invoke('PostToolUse', { ...call, tool_use_id: cmd, tool_input: { cmd }, tool_response: { exit_code: 0 } });
+  }
+  const state = loadGuardrail(options);
+  assert.equal(state.nonTrivial, false);
+  assert.equal(state.verification.revision, 0);
+  assert.equal(state.evidence.filter(e => e.operation === 'operational').length, 3);
+  assert.deepEqual(parseJsonOutput(invoke('Stop')), { continue: true });
+  // A code edit discovered during bookkeeping upgrades the turn immediately.
+  invoke('PostToolUse', { tool_name: 'apply_patch', tool_use_id: 'edit', tool_input: {}, tool_response: { isError: false } });
+  assert.equal(loadGuardrail(options).verification.revision, 1);
+  assert.equal(parseJsonOutput(invoke('Stop')).decision, 'block');
+  // A new Git-only turn cannot shed unfinished work from the preceding turn.
+  invoke('UserPromptSubmit', { turn_id: 'turn-2', prompt: 'push' });
+  assert.equal(parseJsonOutput(invoke('Stop', { turn_id: 'turn-2' })).decision, 'block');
+});
+
+test('failed Git, compound commands and substantive prompts retain persistence', t => {
+  const cwd = mkdtempSync(join(tmpdir(), 'reqall-git-conservative-'));
+  t.after(() => rmSync(cwd, { recursive: true, force: true }));
+  const env = { PLUGIN_DATA: cwd, REQALL_API_KEY: undefined };
+  const cases = [
+    ['commit and push', 'git push origin main', 1],
+    ['commit and push', 'git add . && git commit -m done', 0],
+    ['commit and push', 'git -c alias.ship=push ship', 0],
+    ['commit and push', 'npm test', 0],
+    ['commit and push', 'git merge feature', 0],
+    ['commit and push', 'git commit -m "$(touch x)"', 0],
+  ];
+  for (const [i, [prompt, cmd, exit_code]] of cases.entries()) {
+    const session_id = `case-${i}`;
+    const invoke = (event, extra = {}) => runNode(HOOK, [], { cwd, env, input: hookInput(event, { cwd, session_id, ...extra }) });
+    invoke('UserPromptSubmit', { prompt });
+    invoke('PostToolUse', { tool_name: 'exec_command', tool_use_id: 'call', tool_input: { cmd }, tool_response: { exit_code } });
+    const state = loadGuardrail({ cwd, env, sessionId: session_id, turnId: 'turn-1', allowCurrent: true });
+    assert.equal(state.nonTrivial, true, cmd);
+    assert.equal(state.verification.revision, 1, cmd);
+  }
+  for (const prompt of ['fix the bug then commit and push', 'review changes and commit', 'commit and push; test first']) {
+    const session_id = prompt;
+    runNode(HOOK, [], { cwd, env, input: hookInput('UserPromptSubmit', { cwd, session_id, prompt }) });
+    assert.equal(loadGuardrail({ cwd, env, sessionId: session_id, turnId: 'turn-1', allowCurrent: true }).nonTrivial, true);
+  }
+});
